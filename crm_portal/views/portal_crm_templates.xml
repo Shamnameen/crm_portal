@@ -1,0 +1,2322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ====================================================== -->
+    <!-- PORTAL HOME -->
+    <!-- ====================================================== -->
+
+    <template
+        id="portal_my_home_crm"
+        inherit_id="portal.portal_my_home"
+        name="Portal My CRM"
+    >
+
+        <xpath
+            expr="//div[hasclass('o_portal_docs')]"
+            position="inside"
+        >
+
+            <div
+                class="o_portal_index_card col-md-6 order-2"
+            >
+
+                <a
+                    href="/my/crm"
+                    title="My CRM"
+                    class="d-flex gap-2 gap-md-3 py-3 pe-2 px-md-3 h-100 rounded text-decoration-none bg-100"
+                >
+
+                    <div
+                        class="o_portal_icon d-flex align-items-center justify-content-center"
+                    >
+
+                        <span
+                            class="fa fa-line-chart fa-2x crm-portal-home-icon"
+                        />
+
+                    </div>
+                    <div>
+
+                        <div
+                            class="mt-0 mb-1 fs-5 fw-normal lh-1"
+                        >
+                            My CRM
+                        </div>
+
+                        <div class="opacity-75">
+                            View your CRM opportunities
+                        </div>
+
+                    </div>
+
+                </a>
+
+            </div>
+
+        </xpath>
+
+    </template>
+
+
+    <!-- ====================================================== -->
+    <!-- CRM PIPELINE -->
+    <!-- ====================================================== -->
+
+    <template
+        id="portal_my_crm"
+        name="My CRM"
+    >
+
+        <t t-call="portal.portal_layout">
+
+            <div class="container-fluid">
+
+                <div id="crm_portal_app">
+
+                    <owl-component
+                        name="crm_portal.PortalCRM"
+                    />
+
+                </div>
+
+            </div>
+
+        </t>
+
+    </template>
+
+
+    <!-- ====================================================== -->
+    <!-- NEW OPPORTUNITY -->
+    <!-- ====================================================== -->
+
+    <template
+        id="portal_crm_new"
+        name="New CRM Opportunity"
+    >
+
+        <t t-call="portal.portal_layout">
+
+            <div class="container crm-detail-page" t-att-data-companies="companies_json" t-att-data-customers="all_customers_json" t-att-data-current-user-id="current_user_id" t-att-data-current-team-id="current_team_id or ''">
+
+                <div class="crm-detail-navigation">
+
+                    <a
+                        t-att-href="'/my/crm?filter=leads' if record_type == 'lead' else '/my/crm'"
+                        class="crm-back-link"
+                    >
+                        <i class="fa fa-arrow-left me-1"/>
+                        <t t-if="record_type == 'lead'">Back to Leads</t>
+                        <t t-else="">Back to Pipeline</t>
+                    </a>
+
+                </div>
+
+
+                <form action="/my/crm/create" method="post">
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        t-att-value="request.csrf_token()"
+                    />
+
+                    <input
+                        type="hidden"
+                        name="type"
+                        t-att-value="record_type or 'opportunity'"
+                    />
+
+                    <!-- HEADER -->
+
+                    <div class="crm-detail-header">
+
+                        <div>
+
+                            <div class="crm-detail-label">
+                                <t t-if="record_type == 'lead'">CRM LEAD</t>
+                                <t t-else="">CRM OPPORTUNITY</t>
+                            </div>
+
+                            <input
+                                type="text"
+                                name="name"
+                                class="crm-detail-title-input"
+                                t-att-placeholder="'Lead name...' if record_type == 'lead' else 'Opportunity name...'"
+                                required="required"
+                            />
+                        </div>
+                        <div class="crm-detail-header-values">
+
+                            <div t-if="record_type != 'lead'">
+
+                                <span>
+                                    Expected Revenue
+                                </span>
+
+                                <div class="crm-money-input">
+                                    <span><t t-esc="currency_symbol"/></span>
+                                    <input
+                                        type="number"
+                                        name="expected_revenue"
+                                        step="0.01"
+                                        value="0.00"
+                                        class="form-control form-control-sm"
+                                        style="width: 110px;"
+                                    />
+                                </div>
+
+                            </div>
+
+                            <div t-if="record_type != 'lead'">
+
+                                <span>
+                                    Probability
+                                </span>
+
+                                <div class="crm-percent-input">
+                                    <input
+                                        type="number"
+                                        name="probability"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        value="0"
+                                        class="form-control form-control-sm"
+                                        style="width: 80px;"
+                                    />
+                                    <span>%</span>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- STAGE -->
+
+                    <div class="crm-stage-bar" t-if="record_type != 'lead'">
+
+                        <t
+                            t-foreach="stages"
+                            t-as="stage"
+                        >
+
+                            <div
+                                    t-att-class="
+                                        'crm-stage-item crm-stage-active'
+                                        if default_stage and stage.id == default_stage.id
+                                        else 'crm-stage-item'
+                                    "
+                                    t-att-data-stage-id="stage.id"
+                                    t-att-data-is-won="'1' if (stage.is_won or 'won' in (stage.name or '').lower()) else '0'"
+                            >
+
+                                <t t-esc="stage.name"/>
+
+                            </div>
+
+                        </t>
+
+                    </div>
+
+
+                    <!-- ==================== LEAD FORM ==================== -->
+                    <t t-if="record_type == 'lead'">
+                        <div class="crm-detail-section">
+                            <h3>Lead Information</h3>
+                            <div class="crm-detail-grid">
+                                <!-- LEFT COLUMN -->
+                                <div class="crm-detail-col">
+                                    <div class="crm-field">
+                                        <label>Company Name</label>
+                                        <input
+                                            type="text"
+                                            name="partner_name"
+                                            id="crm_partner_name"
+                                            placeholder="Company Name"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Address</label>
+                                        <div class="crm-address-inputs">
+                                            <input
+                                                type="text"
+                                                name="street"
+                                                id="crm_partner_street"
+                                                placeholder="Street..."
+                                                class="mb-2"
+                                            />
+                                            <input
+                                                type="text"
+                                                name="street2"
+                                                id="crm_partner_street2"
+                                                placeholder="Street 2..."
+                                                class="mb-2"
+                                            />
+                                            <div class="crm-address-row mb-2">
+                                                <input
+                                                    type="text"
+                                                    name="city"
+                                                    id="crm_partner_city"
+                                                    placeholder="City"
+                                                />
+                                                <select
+                                                    name="state_id"
+                                                    id="crm_partner_state_id"
+                                                >
+                                                    <option value="">State</option>
+                                                    <t t-foreach="states" t-as="st">
+                                                        <option t-att-value="st.id">
+                                                            <t t-esc="st.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    name="zip"
+                                                    id="crm_partner_zip"
+                                                    placeholder="ZIP"
+                                                />
+                                            </div>
+                                            <select
+                                                name="country_id"
+                                                id="crm_partner_country_id"
+                                            >
+                                                <option value="">Country</option>
+                                                <t t-foreach="countries" t-as="cntry">
+                                                    <option t-att-value="cntry.id">
+                                                        <t t-esc="cntry.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Website</label>
+                                        <input
+                                            type="text"
+                                            name="website"
+                                            id="crm_website"
+                                            placeholder="e.g. https://www.odoo.com"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Salesperson</label>
+                                        <select
+                                            t-if="is_admin"
+                                            name="user_id"
+                                            class="form-select"
+                                        >
+                                            <t t-foreach="salespersons" t-as="sp">
+                                                <option
+                                                    t-att-value="sp.id"
+                                                    t-att-selected="'selected' if sp.id == current_user_id else None"
+                                                >
+                                                    <t t-esc="sp.name"/>
+                                                </option>
+                                            </t>
+                                        </select>
+                                        <t t-else="">
+                                            <input
+                                                type="text"
+                                                t-att-value="mapped_salesperson.name if mapped_salesperson else request.env.user.name"
+                                                readonly="readonly"
+                                            />
+                                            <input type="hidden" name="user_id" t-att-value="mapped_salesperson.id if mapped_salesperson else request.env.user.id"/>
+                                        </t>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Sales Team</label>
+                                        <select name="team_id" class="form-select">
+                                            <option value="">Select Team...</option>
+                                            <t t-foreach="teams" t-as="tm">
+                                                <option t-att-value="tm.id" t-att-selected="'selected' if current_team_id and tm.id == current_team_id else None">
+                                                    <t t-esc="tm.name"/>
+                                                </option>
+                                            </t>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- RIGHT COLUMN -->
+                                <div class="crm-detail-col">
+                                    <div class="crm-field">
+                                        <label>Contact Name</label>
+                                        <input
+                                            type="text"
+                                            name="contact_name"
+                                            id="crm_contact_name"
+                                            list="crm_contact_name_list"
+                                            autocomplete="off"
+                                            placeholder="Contact Name"
+                                        />
+                                        <datalist id="crm_contact_name_list"></datalist>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Email</label>
+                                        <input
+                                            type="email"
+                                            name="email_from"
+                                            id="crm_email_from"
+                                            placeholder="Email"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Job Position</label>
+                                        <input
+                                            type="text"
+                                            name="function"
+                                            id="crm_partner_function"
+                                            placeholder="Job Position"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Phone</label>
+                                        <input
+                                            type="text"
+                                            name="phone"
+                                            id="crm_phone"
+                                            placeholder="Phone"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Priority</label>
+                                        <select name="priority">
+                                            <option value="0">☆☆☆</option>
+                                            <option value="1">★☆☆</option>
+                                            <option value="2">★★☆</option>
+                                            <option value="3">★★★</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Tags</label>
+                                        <input type="hidden" name="has_tags_field" value="1"/>
+                                        <div class="crm-tag-widget">
+                                            <div class="crm-tag-chips-wrapper">
+                                            </div>
+                                            <input type="text" class="crm-tag-input" autocomplete="off" placeholder=""/>
+                                            <span class="crm-tag-caret fa fa-caret-down"></span>
+                                            <div class="crm-tag-dropdown">
+                                                <t t-foreach="tags" t-as="tg">
+                                                    <div class="crm-tag-dropdown-item"
+                                                         t-att-data-id="tg.id"
+                                                         t-att-data-name="tg.name"
+                                                         t-att-data-color="tg.color or 0">
+                                                        <span t-attf-class="crm-tag-badge-preview crm-tag-color-{{ tg.color or 0 }}">
+                                                            <t t-esc="tg.name"/>
+                                                        </span>
+                                                    </div>
+                                                </t>
+                                                <div class="crm-tag-dropdown-empty d-none">No tags found</div>
+                                            </div>
+                                        </div>
+                                    </div>
+<!--                                </div>-->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- LEAD NOTEBOOK -->
+                        <div class="crm-notebook">
+                            <input
+                                type="radio"
+                                id="new_notes_tab"
+                                name="new_notebook"
+                                checked="checked"
+                            />
+                            <label for="new_notes_tab">Notes</label>
+
+                            <input
+                                type="radio"
+                                id="new_extra_tab"
+                                name="new_notebook"
+                            />
+                            <label for="new_extra_tab">Extra Info</label>
+
+                            <div class="crm-notebook-content">
+                                <!-- NOTES -->
+                                <section
+                                    id="new_notes_page"
+                                    class="crm-notebook-page crm-notes-page"
+                                >
+                                    <div class="crm-field">
+                                        <label>Notes</label>
+                                        <textarea
+                                            name="description"
+                                            rows="8"
+                                            placeholder="Add notes..."
+                                        />
+                                    </div>
+                                </section>
+
+                                <!-- EXTRA INFO -->
+                                <section
+                                    id="new_extra_page"
+                                    class="crm-notebook-page"
+                                >
+                                    <div class="crm-contact-section">
+                                        <h4>Marketing</h4>
+                                        <div class="crm-detail-grid">
+                                            <div class="crm-field">
+                                                <label>Company</label>
+                                                <select name="company_id" class="form-select">
+                                                    <t t-foreach="companies_list" t-as="comp">
+                                                        <option
+                                                            t-att-value="comp.id"
+                                                            t-att-selected="'selected' if comp.id == request.env.company.id else None"
+                                                        >
+                                                            <t t-esc="comp.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Campaign</label>
+                                                <select name="campaign_id" class="form-select">
+                                                    <option value="">Select Campaign...</option>
+                                                    <t t-foreach="campaigns" t-as="camp">
+                                                        <option t-att-value="camp.id">
+                                                            <t t-esc="camp.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Medium</label>
+                                                <select name="medium_id" class="form-select">
+                                                    <option value="">Select Medium...</option>
+                                                    <t t-foreach="mediums" t-as="med">
+                                                        <option t-att-value="med.id">
+                                                            <t t-esc="med.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Source</label>
+                                                <select name="source_id" class="form-select">
+                                                    <option value="">Select Source...</option>
+                                                    <t t-foreach="sources" t-as="src">
+                                                        <option t-att-value="src.id">
+                                                            <t t-esc="src.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Referred By</label>
+                                                <input
+                                                    type="text"
+                                                    name="referred"
+                                                    placeholder="Referred By"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="crm-contact-section">
+                                        <h4>Analysis</h4>
+                                        <div class="crm-detail-grid">
+                                            <div class="crm-field">
+                                                <label>Assignment Date</label>
+                                                <input
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    placeholder="Assignment Date"
+                                                    value=""
+                                                />
+                                            </div>
+                                            <div class="crm-field">
+                                                <label>Closed Date</label>
+                                                <input
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    placeholder="Closed Date"
+                                                    value=""
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- ==================== OPPORTUNITY FORM ==================== -->
+                    <t t-else="">
+                    <input type="hidden" name="stage_id" id="crm_stage_id_select" t-att-value="default_stage.id if default_stage else ''"/>
+                    <div class="crm-detail-section">
+
+                        <h3>Opportunity Information</h3>
+
+                        <div class="crm-detail-grid">
+
+                            <!-- LEFT COLUMN -->
+                            <div class="crm-detail-col">
+
+                                <div class="crm-field">
+                                    <label>
+                                        Contact
+                                    </label>
+                                    <div class="crm-customer-input-group">
+                                        <select
+                                            name="partner_id"
+                                            class="form-select crm-customer-select"
+                                            id="crm_partner_id_select"
+                                        >
+                                            <option value="" selected="selected"></option>
+                                            <t
+                                                t-foreach="all_customers"
+                                                t-as="cust"
+                                            >
+                                                <option
+                                                    t-att-value="cust.id"
+                                                >
+                                                    <t t-esc="cust.name"/>
+                                                </option>
+                                            </t>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>
+                                        Contact Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="contact_name"
+                                        id="crm_opp_contact_name"
+                                        placeholder="Contact Name"
+                                    />
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>
+                                        Company Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="partner_name"
+                                        id="crm_opp_partner_name"
+                                        placeholder="Company Name"
+                                    />
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        name="email_from"
+                                        id="crm_opp_email_from"
+                                        placeholder="Email"
+                                    />
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>
+                                        Phone
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="phone"
+                                        id="crm_opp_phone"
+                                        placeholder="Phone"
+                                    />
+                                </div>
+
+                            </div>
+
+                            <!-- RIGHT COLUMN -->
+                            <div class="crm-detail-col">
+
+                                <div class="crm-field">
+                                    <label>
+                                        Salesperson
+                                    </label>
+                                    <select
+                                        t-if="is_admin"
+                                        name="user_id"
+                                        class="form-select"
+                                    >
+                                        <t
+                                            t-foreach="salespersons"
+                                            t-as="sp"
+                                        >
+                                            <option
+                                                t-att-value="sp.id"
+                                                t-att-selected="'selected' if sp.id == current_user_id else None"
+                                            >
+                                                <t t-esc="sp.name"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                    <t t-else="">
+                                        <input
+                                            type="text"
+                                            t-att-value="mapped_salesperson.name if mapped_salesperson else request.env.user.name"
+                                            readonly="readonly"
+                                        />
+                                        <input type="hidden" name="user_id" t-att-value="mapped_salesperson.id if mapped_salesperson else request.env.user.id"/>
+                                    </t>
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>
+                                        Expected Closing
+                                    </label>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <input
+                                            type="date"
+                                            name="date_deadline"
+                                            class="form-control"
+                                        />
+                                        <select name="priority" class="form-select w-auto">
+                                            <option value="0">☆☆☆</option>
+                                            <option value="1">★☆☆</option>
+                                            <option value="2">★★☆</option>
+                                            <option value="3">★★★</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>Tags</label>
+                                    <input type="hidden" name="has_tags_field" value="1"/>
+                                    <div class="crm-tag-widget">
+                                        <div class="crm-tag-chips-wrapper">
+                                        </div>
+                                        <input type="text" class="crm-tag-input" autocomplete="off" placeholder=""/>
+                                        <span class="crm-tag-caret fa fa-caret-down"></span>
+                                        <div class="crm-tag-dropdown">
+                                            <t t-foreach="tags" t-as="tg">
+                                                <div class="crm-tag-dropdown-item"
+                                                     t-att-data-id="tg.id"
+                                                     t-att-data-name="tg.name"
+                                                     t-att-data-color="tg.color or 0">
+                                                    <span t-attf-class="crm-tag-badge-preview crm-tag-color-{{ tg.color or 0 }}">
+                                                        <t t-esc="tg.name"/>
+                                                    </span>
+                                                </div>
+                                            </t>
+                                            <div class="crm-tag-dropdown-empty d-none">No tags found</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- NOTEBOOK -->
+
+                    <div class="crm-notebook">
+
+                        <input
+                            type="radio"
+                            id="new_notes_tab"
+                            name="new_notebook"
+                            checked="checked"
+                        />
+
+                        <label for="new_notes_tab">
+                            Notes
+                        </label>
+                        <input
+                            type="radio"
+                            id="new_contacts_tab"
+                            name="new_notebook"
+                        />
+
+                        <label for="new_contacts_tab">
+                            Contacts
+                        </label>
+                        <div class="crm-notebook-content">
+
+                            <!-- NOTES -->
+
+                            <section
+                                id="new_notes_page"
+                                class="crm-notebook-page crm-notes-page"
+                            >
+                                <div class="crm-field">
+
+                                    <label>
+                                        Notes
+                                    </label>
+
+                                    <textarea
+                                        name="description"
+                                        rows="8"
+                                        placeholder="Add notes..."
+                                    />
+
+                                </div>
+
+                            </section>
+                            <!-- CONTACTS -->
+                            <section
+                                id="new_contacts_page"
+                                class="crm-notebook-page crm-contacts-page"
+                            >
+
+                                <div class="crm-contact-section">
+
+                                    <h4>
+                                        Company Information
+                                    </h4>
+
+                                    <div class="crm-field">
+                                        <label>Address</label>
+                                        <div class="crm-address-inputs">
+                                            <input
+                                                type="text"
+                                                name="partner_street"
+                                                id="crm_partner_street"
+                                                placeholder="Street..."
+                                                class="mb-2"
+                                            />
+                                            <input
+                                                type="text"
+                                                name="partner_street2"
+                                                id="crm_partner_street2"
+                                                placeholder="Street 2..."
+                                                class="mb-2"
+                                            />
+                                            <div class="crm-address-row mb-2">
+                                                <input
+                                                    type="text"
+                                                    name="partner_city"
+                                                    id="crm_partner_city"
+                                                    placeholder="City"
+                                                />
+                                                <select
+                                                    name="partner_state_id"
+                                                    id="crm_partner_state_id"
+                                                >
+                                                    <option value="">State</option>
+                                                    <t t-foreach="states" t-as="st">
+                                                        <option t-att-value="st.id">
+                                                            <t t-esc="st.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    name="partner_zip"
+                                                    id="crm_partner_zip"
+                                                    placeholder="ZIP"
+                                                />
+                                            </div>
+                                            <select
+                                                name="partner_country_id"
+                                                id="crm_partner_country_id"
+                                            >
+                                                <option value="">Country</option>
+                                                <t t-foreach="countries" t-as="cntry">
+                                                    <option t-att-value="cntry.id">
+                                                        <t t-esc="cntry.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+
+                                <div class="crm-contact-section">
+
+                                    <h4>
+                                        Contact Information
+                                    </h4>
+
+
+                                    <div class="crm-detail-grid">
+
+                                        <div class="crm-field">
+
+                                            <label>
+                                                Contact Name
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                name="contact_name"
+                                                id="crm_contact_name"
+                                                list="crm_contact_name_list"
+                                                autocomplete="off"
+                                                placeholder="Contact Name"
+                                            />
+                                            <datalist id="crm_contact_name_list"></datalist>
+
+                                        </div>
+
+
+                                        <div class="crm-field">
+
+                                            <label>
+                                                Website
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                name="website"
+                                                id="crm_website"
+                                                placeholder="Website"
+                                            />
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </section>
+
+                        </div>
+
+                    </div>
+                    </t>
+
+
+                    <!-- BUTTONS -->
+
+                    <div class="crm-detail-footer">
+
+                        <a
+                            href="/my/crm"
+                            class="btn crm-btn-outline"
+                        >
+                            Cancel
+                        </a>
+
+                        <button
+                            type="submit"
+                            class="btn crm-btn-primary"
+                        >
+                            <t t-if="record_type == 'lead'">Save Lead</t>
+                            <t t-else="">Save Opportunity</t>
+                        </button>
+
+                    </div>
+
+                </form>
+
+            </div>
+        </t>
+
+    </template>
+
+
+    <!-- ====================================================== -->
+    <!-- OPPORTUNITY DETAIL -->
+    <!-- ====================================================== -->
+
+    <template
+        id="portal_crm_detail"
+        name="CRM Opportunity Detail"
+    >
+
+        <t t-call="portal.portal_layout">
+
+            <div class="container crm-detail-page" t-att-data-companies="companies_json" t-att-data-customers="all_customers_json" t-att-data-current-user-id="current_user_id" t-att-data-current-team-id="current_team_id or ''">
+
+                <div class="crm-detail-navigation">
+
+                    <a
+                        t-att-href="'/my/crm?filter=leads' if lead.type == 'lead' else '/my/crm'"
+                        class="crm-back-link"
+                    >
+                        <i class="fa fa-arrow-left me-1"/>
+                        <t t-if="lead.type == 'lead'">Back to Leads</t>
+                        <t t-else="">Back to Pipeline</t>
+                    </a>
+
+
+                    <t t-if="not can_edit">
+
+<!--                        <span class="crm-readonly-badge">-->
+<!--                            Read only-->
+<!--                        </span>-->
+
+                    </t>
+
+                </div>
+
+                <div t-if="lost_error == 'won'" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                    <strong>Error:</strong> Won stage opportunities cannot be converted into Lost.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <div t-if="lost_error == 'reason'" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                    <strong>Error:</strong> Please select a reason for marking this opportunity as lost.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+
+               <div t-if="can_edit" class="crm-action-bar">
+                    <button t-if="lead.type == 'lead'" type="button" class="btn btn-primary crm-btn-convert me-2"
+                            data-bs-toggle="modal" data-bs-target="#crmConvertModal">
+                        Convert to Opportunity
+                    </button>
+                    <form t-if="lead.type == 'opportunity' and lead.active and not (lead.stage_id and (lead.stage_id.is_won or 'won' in (lead.stage_id.name or '').lower()))"
+                          method="post" t-att-action="'/my/crm/%s/mark-won' % lead.id" class="d-inline me-2" id="crm_mark_won_form">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <button type="submit" class="btn btn-primary crm-btn-won">
+                            Won
+                        </button>
+                    </form>
+                    <button t-if="lead.active and not (lead.stage_id and (lead.stage_id.is_won or 'won' in (lead.stage_id.name or '').lower())) and lead.probability != 100.0" type="button" class="btn btn-secondary crm-btn-lost me-2"
+                            data-bs-toggle="modal" data-bs-target="#crmLostModal">
+                        Lost
+                    </button>
+                    <form t-if="not lead.active" method="post"
+                          t-att-action="'/my/crm/%s/restore' % lead.id" class="d-inline">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <button type="submit" class="btn btn-secondary crm-btn-restore">
+                            Restore
+                        </button>
+                    </form>
+                </div>
+
+                <!-- LEAD CONVERT MODAL -->
+                <div t-if="lead.type == 'lead' and can_edit" class="modal fade" id="crmConvertModal"
+                     tabindex="-1" aria-labelledby="crmConvertModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content">
+                            <form method="post" t-att-action="'/my/crm/%s/convert' % lead.id">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="crmConvertModalLabel">Convert to Opportunity</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <!-- CONVERSION ACTION RADIO -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Conversion Action</label>
+                                        <div class="d-flex flex-column gap-2 mt-1">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="conversion_action" id="crm_conv_convert" value="convert" checked="checked"/>
+                                                <label class="form-check-label" for="crm_conv_convert">
+                                                    Convert to opportunity
+                                                </label>
+                                            </div>
+                                            <div class="form-check" t-if="merge_opportunities">
+                                                <input class="form-check-input" type="radio" name="conversion_action" id="crm_conv_merge" value="merge"/>
+                                                <label class="form-check-label" for="crm_conv_merge">
+                                                    Merge with existing opportunities
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- ASSIGN THIS OPPORTUNITY TO -->
+                                    <div class="card p-3 mb-3 bg-light border-0">
+                                        <div class="fw-bold mb-2">Assign this opportunity to</div>
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label class="form-label small text-muted">Salesperson</label>
+                                                <select name="user_id" class="form-select">
+                                                    <option value="">Unassigned</option>
+                                                    <t t-foreach="salespersons" t-as="sp">
+                                                        <option t-att-value="sp.id" t-att-selected="'selected' if (lead.user_id and lead.user_id.id == sp.id) or (not lead.user_id and sp.id == current_user_id) else None">
+                                                            <t t-esc="sp.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small text-muted">Sales Team</label>
+                                                <select name="team_id" class="form-select">
+                                                    <option value="">None</option>
+                                                    <t t-foreach="teams" t-as="tm">
+                                                        <option t-att-value="tm.id" t-att-selected="'selected' if (lead.team_id and lead.team_id.id == tm.id) or (not lead.team_id and current_team_id and tm.id == current_team_id) else None">
+                                                            <t t-esc="tm.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- MERGE LIST SECTION (visible only when merge is selected) -->
+                                    <div id="crm_merge_opportunities_wrapper" class="mb-3 d-none" t-if="merge_opportunities">
+                                        <label class="form-label fw-bold">Select Opportunities to Merge</label>
+                                        <div class="table-responsive border rounded" style="max-height: 200px; overflow-y: auto;">
+                                            <table class="table table-sm table-hover mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width: 35px;"></th>
+                                                        <th>Opportunity</th>
+                                                        <th>Contact / Company</th>
+                                                        <th>Stage</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <t t-foreach="merge_opportunities" t-as="mo">
+                                                        <tr>
+                                                            <td>
+                                                                <input type="checkbox" name="duplicated_lead_ids" t-att-value="mo.id" checked="checked"/>
+                                                            </td>
+                                                            <td><t t-esc="mo.name"/></td>
+                                                            <td><t t-esc="mo.contact_name or mo.partner_name or ''"/></td>
+                                                            <td><t t-esc="mo.stage_id.name if mo.stage_id else ''"/></td>
+                                                        </tr>
+                                                    </t>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- CUSTOMER ACTION SECTION (visible when convert is selected) -->
+                                    <div id="crm_customer_action_wrapper" class="mb-3">
+                                        <input type="hidden" name="company_name_confirm" id="crm_modal_company_name"
+                                               t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.is_company and lead.partner_id.name) or ''"/>
+                                        <div class="row align-items-start">
+                                            <div class="col-md-5">
+                                                <label class="form-label fw-bold mb-2">Related Customer</label>
+                                                <div class="d-flex flex-column gap-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="customer_action" id="crm_cust_create" value="create" t-att-checked="'checked' if not lead.partner_id else None"/>
+                                                        <label class="form-check-label" for="crm_cust_create">
+                                                            Create a new customer
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="customer_action" id="crm_cust_exist" value="exist" t-att-checked="'checked' if lead.partner_id else None"/>
+                                                        <label class="form-check-label" for="crm_cust_exist">
+                                                            Link to an existing customer
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="customer_action" id="crm_cust_nothing" value="nothing"/>
+                                                        <label class="form-check-label" for="crm_cust_nothing">
+                                                            Do not link to a customer
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-7">
+                                                <div id="crm_existing_partner_box" class="mb-3 d-none">
+                                                    <label class="form-label fw-bold mb-1">Contact</label>
+                                                    <select name="partner_id" class="form-select">
+                                                        <option value="">Select an existing customer...</option>
+                                                        <t t-foreach="all_customers" t-as="cust">
+                                                            <option t-att-value="cust.id" t-att-selected="'selected' if lead.partner_id and lead.partner_id.id == cust.id else None">
+                                                                <t t-esc="cust.name"/>
+                                                            </option>
+                                                        </t>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="submit" class="btn btn-primary">Create Opportunity</button>
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div t-if="lead.active and can_edit and not (lead.stage_id and (lead.stage_id.is_won or 'won' in (lead.stage_id.name or '').lower())) and lead.probability != 100.0" class="modal fade" id="crmLostModal"
+                     tabindex="-1" aria-labelledby="crmLostModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <form method="post" t-att-action="'/my/crm/%s/mark-lost' % lead.id">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="crmLostModalLabel">Mark Lost</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label for="crm_lost_reason" class="form-label">Lost Reason</label>
+                                        <select id="crm_lost_reason" name="lost_reason_id" class="form-select" required="required">
+                                            <option value="">Select a reason</option>
+                                            <t t-foreach="lost_reasons" t-as="reason">
+                                                <option t-att-value="reason.id"><t t-esc="reason.name"/></option>
+                                            </t>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="crm_lost_feedback" class="form-label">Closing Note</label>
+                                        <textarea id="crm_lost_feedback" name="lost_feedback" class="form-control"
+                                                  rows="4" placeholder="What went wrong?"/>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="fa fa-times-circle me-1"/> Confirm Lost
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+
+                <form
+                    id="crm_detail_form"
+                    method="post"
+                    t-att-action="
+                        '/my/crm/%s/update' % lead.id
+                    "
+                    class="crm-detail-card"
+                >
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        t-att-value="request.csrf_token()"
+                    />
+
+
+                    <!-- ====================================== -->
+                    <!-- HEADER -->
+                    <!-- ====================================== -->
+
+                    <div class="crm-detail-header">
+
+                        <div>
+
+                            <div class="crm-detail-label">
+                                <t t-if="lead.type == 'lead'">CRM LEAD</t>
+                                <t t-else="">CRM OPPORTUNITY</t>
+                            </div>
+                            <input
+                                t-if="can_edit"
+                                type="text"
+                                name="name"
+                                class="crm-detail-title-input"
+                                placeholder="e.g. Product Pricing"
+                                t-att-value="
+                                    lead.name or ''
+                                "
+                            />
+                            <h1
+                                t-if="not can_edit"
+                                class="crm-detail-title"
+                            >
+                                <t
+                                    t-esc="
+                                        lead.name
+                                    "
+                                />
+                            </h1>
+                            <div class="crm-detail-customer" t-if="lead.partner_id">
+
+                                <span class="crm-detail-avatar">
+
+                                    <t
+                                        t-esc="
+                                            (lead.partner_id.name and lead.partner_id.name[0].upper()) or '?'
+                                        "
+                                    />
+                                </span>
+                                <span>
+                                    <t
+                                        t-esc="
+                                            lead.partner_id.name"/>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="crm-detail-header-values">
+
+                            <div t-if="lead.type != 'lead'">
+
+                                <span>
+                                    Expected Revenue
+                                </span>
+
+                                <div t-if="can_edit" class="crm-money-input">
+                                    <span><t t-esc="currency_symbol"/></span>
+                                    <input
+                                        type="number"
+                                        name="expected_revenue"
+                                        step="0.01"
+                                        t-att-value="'%.2f' % (lead.expected_revenue or 0)"
+                                        class="form-control form-control-sm"
+                                        style="width: 110px;"
+                                    />
+                                </div>
+                                <strong t-else="">
+                                    <t t-esc="currency_symbol"/><t t-esc="'%.2f' % (lead.expected_revenue or 0)"/>
+                                </strong>
+                            </div>
+
+
+                            <div t-if="lead.type != 'lead'">
+                                <span>
+                                    Probability
+                                </span>
+
+                                <div t-if="can_edit" class="crm-percent-input">
+                                    <input
+                                        type="number"
+                                        name="probability"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        t-att-value="'%.2f' % (lead.probability or 0)"
+                                        class="form-control form-control-sm"
+                                        style="width: 80px;"
+                                    />
+                                    <span>%</span>
+                                </div>
+                                <strong t-else="">
+                                    <t t-esc="'%.2f' % (lead.probability or 0)"/>%
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ====================================== -->
+                    <!-- STAGE BAR -->
+                    <!-- ====================================== -->
+
+                    <div class="crm-stage-bar" t-if="lead.type != 'lead'">
+
+                        <t
+                            t-foreach="stages"
+                            t-as="stage"
+                        >
+                            <div
+                                       t-att-class="
+                                    'crm-stage-item crm-stage-active'
+                                    if stage.id == lead.stage_id.id
+                                    else 'crm-stage-item'
+                                "
+                                       t-att-data-stage-id="stage.id"
+                                       t-att-data-is-won="'1' if (stage.is_won or 'won' in (stage.name or '').lower()) else '0'"
+                            >
+                                <t
+                                    t-esc="
+                                        stage.name
+                                    "
+                                />
+                            </div>
+                        </t>
+                    </div>
+                    <!-- ====================================== -->
+                    <!-- INFORMATION -->
+                    <!-- ====================================== -->
+
+                    <!-- ==================== LEAD FORM ==================== -->
+                    <t t-if="lead.type == 'lead'">
+                        <div class="crm-detail-section">
+                            <h3>Lead Information</h3>
+                            <div class="crm-detail-grid">
+                                <!-- LEFT COLUMN -->
+                                <div class="crm-detail-col">
+                                    <div class="crm-field">
+                                        <label>Company Name</label>
+                                        <input
+                                            type="text"
+                                            name="partner_name"
+                                            id="crm_partner_name"
+                                            placeholder="Company Name"
+                                            t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.name) or ''"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        />
+                                    </div>
+                                    <div class="crm-field">
+                                        <label>Address</label>
+                                        <div class="crm-address-inputs">
+                                            <input
+                                                type="text"
+                                                name="street"
+                                                id="crm_partner_street"
+                                                placeholder="Street..."
+                                                class="mb-2"
+                                                t-att-value="lead.street or (lead.partner_id and lead.partner_id.street) or ''"
+                                                t-att-readonly="'readonly' if not can_edit else None"
+                                            />
+                                            <input
+                                                type="text"
+                                                name="street2"
+                                                id="crm_partner_street2"
+                                                placeholder="Street 2..."
+                                                class="mb-2"
+                                                t-att-value="lead.street2 or (lead.partner_id and lead.partner_id.street2) or ''"
+                                                t-att-readonly="'readonly' if not can_edit else None"
+                                            />
+                                            <div class="crm-address-row mb-2">
+                                                <input
+                                                    type="text"
+                                                    name="city"
+                                                    id="crm_partner_city"
+                                                    placeholder="City"
+                                                    t-att-value="lead.city or (lead.partner_id and lead.partner_id.city) or ''"
+                                                    t-att-readonly="'readonly' if not can_edit else None"
+                                                />
+                                                <select
+                                                    t-if="can_edit"
+                                                    name="state_id"
+                                                    id="crm_partner_state_id"
+                                                >
+                                                    <option value="">State</option>
+                                                    <t t-foreach="states" t-as="st">
+                                                        <option
+                                                            t-att-value="st.id"
+                                                            t-att-selected="'selected' if (lead.state_id and lead.state_id.id == st.id) or (not lead.state_id and lead.partner_id and lead.partner_id.state_id and lead.partner_id.state_id.id == st.id) else None"
+                                                        >
+                                                            <t t-esc="st.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    t-else=""
+                                                    type="text"
+                                                    t-att-value="(lead.state_id and lead.state_id.name) or (lead.partner_id and lead.partner_id.state_id and lead.partner_id.state_id.name) or ''"
+                                                    readonly="readonly"
+                                                    placeholder="State"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    name="zip"
+                                                    id="crm_partner_zip"
+                                                    placeholder="ZIP"
+                                                    t-att-value="lead.zip or (lead.partner_id and lead.partner_id.zip) or ''"
+                                                    t-att-readonly="'readonly' if not can_edit else None"
+                                                />
+                                            </div>
+                                            <select
+                                                t-if="can_edit"
+                                                name="country_id"
+                                                id="crm_partner_country_id"
+                                            >
+                                                <option value="">Country</option>
+                                                <t t-foreach="countries" t-as="cntry">
+                                                    <option
+                                                        t-att-value="cntry.id"
+                                                        t-att-selected="'selected' if (lead.country_id and lead.country_id.id == cntry.id) or (not lead.country_id and lead.partner_id and lead.partner_id.country_id and lead.partner_id.country_id.id == cntry.id) else None"
+                                                    >
+                                                        <t t-esc="cntry.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                            <input
+                                                t-else=""
+                                                type="text"
+                                                t-att-value="(lead.country_id and lead.country_id.name) or (lead.partner_id and lead.partner_id.country_id and lead.partner_id.country_id.name) or ''"
+                                                readonly="readonly"
+                                                placeholder="Country"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Website</label>
+                                        <input
+                                            type="text"
+                                            name="website"
+                                            id="crm_website"
+                                            placeholder="e.g. https://www.odoo.com"
+                                            t-att-value="lead.website or (lead.partner_id and lead.partner_id.website) or ''"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Salesperson</label>
+                                        <select
+                                            t-if="is_admin and can_edit"
+                                            name="user_id"
+                                            class="form-select"
+                                        >
+                                            <option value="">Unassigned</option>
+                                            <t t-foreach="salespersons" t-as="sp">
+                                                <option
+                                                    t-att-value="sp.id"
+                                                    t-att-selected="'selected' if (lead.user_id and lead.user_id.id == sp.id) or (not lead.user_id and sp.id == current_user_id) else None"
+                                                >
+                                                    <t t-esc="sp.name"/>
+                                                </option>
+                                            </t>
+                                        </select>
+                                        <t t-else="">
+                                            <input
+                                                type="text"
+                                                t-att-value="lead.user_id.name if lead.user_id else request.env.user.name"
+                                                readonly="readonly"
+                                            />
+                                            <input type="hidden" name="user_id" t-att-value="lead.user_id.id if lead.user_id else request.env.user.id"/>
+                                        </t>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Sales Team</label>
+                                        <select
+                                            t-if="can_edit and teams"
+                                            name="team_id"
+                                            class="form-select"
+                                        >
+                                            <option value="">Select Team...</option>
+                                            <t t-foreach="teams" t-as="tm">
+                                                <option
+                                                    t-att-value="tm.id"
+                                                    t-att-selected="'selected' if (lead.team_id and lead.team_id.id == tm.id) or (not lead.team_id and current_team_id and tm.id == current_team_id) else None"
+                                                >
+                                                    <t t-esc="tm.name"/>
+                                                </option>
+                                            </t>
+                                        </select>
+                                            <input
+                                                t-else=""
+                                                type="text"
+                                                t-att-value="lead.team_id.name if lead.team_id else (request.env.user.sale_team_id.name if request.env.user.sale_team_id else '')"
+                                                readonly="readonly"
+                                            />
+
+                                    </div>
+                                </div>
+
+                                <!-- RIGHT COLUMN -->
+                                <div class="crm-detail-col">
+                                    <!-- Contact Name hidden in Lead stage -->
+                                    <div class="crm-field">
+                                        <label>Contact Name</label>
+                                        <input
+                                            type="text"
+                                            name="contact_name"
+                                            id="crm_contact_name"
+                                            placeholder="Enter contact name"
+                                            t-att-value="lead.contact_name or ''"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Email</label>
+                                        <input
+                                            type="email"
+                                            name="email_from"
+                                            id="crm_email_from"
+                                            placeholder="Email"
+                                            t-att-value="lead.email_from or (lead.partner_id and lead.partner_id.email) or ''"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Job Position</label>
+                                        <input
+                                            type="text"
+                                            name="function"
+                                            id="crm_partner_function"
+                                            placeholder="Job Position"
+                                            t-att-value="lead.function or (lead.partner_id and lead.partner_id.function) or ''"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Phone</label>
+                                        <input
+                                            type="text"
+                                            name="phone"
+                                            id="crm_phone"
+                                            placeholder="Phone"
+                                            t-att-value="lead.phone or (lead.partner_id and lead.partner_id.phone) or ''"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        />
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Priority</label>
+                                        <select
+                                            name="priority"
+                                            t-att-disabled="'disabled' if not can_edit else None"
+                                        >
+                                            <option value="0" t-att-selected="'selected' if lead.priority == '0' else None">☆☆☆</option>
+                                            <option value="1" t-att-selected="'selected' if lead.priority == '1' else None">★☆☆</option>
+                                            <option value="2" t-att-selected="'selected' if lead.priority == '2' else None">★★☆</option>
+                                            <option value="3" t-att-selected="'selected' if lead.priority == '3' else None">★★★</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="crm-field">
+                                        <label>Tags</label>
+                                        <input t-if="can_edit" type="hidden" name="has_tags_field" value="1"/>
+                                        <div t-att-class="'crm-tag-widget' if can_edit else 'crm-tag-widget crm-tag-widget-readonly'">
+                                            <div class="crm-tag-chips-wrapper">
+                                                <t t-foreach="tags" t-as="tg">
+                                                    <span t-if="lead and tg.id in lead.tag_ids.ids"
+                                                          t-attf-class="crm-tag-pill crm-tag-color-{{ tg.color or 0 }}"
+                                                          t-att-data-id="tg.id"
+                                                          t-att-data-name="tg.name"
+                                                          t-att-data-color="tg.color or 0">
+                                                        <span class="crm-tag-text"><t t-esc="tg.name"/></span>
+                                                        <button t-if="can_edit" type="button" class="crm-tag-remove" t-att-data-id="tg.id" aria-label="Remove">&amp;times;</button>
+                                                        <input t-if="can_edit" type="hidden" name="tag_ids" t-att-value="tg.id"/>
+                                                    </span>
+                                                </t>
+                                                <span t-if="not can_edit and (not lead or not lead.tag_ids)" class="crm-tag-empty-text">None</span>
+                                            </div>
+                                            <input t-if="can_edit" type="text" class="crm-tag-input" autocomplete="off" placeholder=""/>
+                                            <span t-if="can_edit" class="crm-tag-caret fa fa-caret-down"></span>
+                                            <div t-if="can_edit" class="crm-tag-dropdown">
+                                                <t t-foreach="tags" t-as="tg">
+                                                    <div t-att-class="'crm-tag-dropdown-item d-none' if (lead and tg.id in lead.tag_ids.ids) else 'crm-tag-dropdown-item'"
+                                                         t-att-data-id="tg.id"
+                                                         t-att-data-name="tg.name"
+                                                         t-att-data-color="tg.color or 0">
+                                                        <span t-attf-class="crm-tag-badge-preview crm-tag-color-{{ tg.color or 0 }}">
+                                                            <t t-esc="tg.name"/>
+                                                        </span>
+                                                    </div>
+                                                </t>
+                                                <div class="crm-tag-dropdown-empty d-none">No tags found</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- LEAD NOTEBOOK -->
+                        <div class="crm-notebook">
+                            <input
+                                type="radio"
+                                id="detail_notes_tab"
+                                name="detail_notebook"
+                                checked="checked"
+                            />
+                            <label for="detail_notes_tab">Notes</label>
+
+                            <input
+                                type="radio"
+                                id="detail_extra_tab"
+                                name="detail_notebook"
+                            />
+                            <label for="detail_extra_tab">Extra Info</label>
+
+                            <div class="crm-notebook-content">
+                                <!-- NOTES -->
+                                <section
+                                    id="detail_notes_page"
+                                    class="crm-notebook-page crm-notes-page"
+                                >
+                                    <div class="crm-field">
+                                        <label>Notes</label>
+                                        <textarea
+                                            name="description"
+                                            rows="10"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        ><t t-esc="description_text or ''"/></textarea>
+                                    </div>
+                                </section>
+
+                                <!-- EXTRA INFO -->
+                                <section
+                                    id="detail_extra_page"
+                                    class="crm-notebook-page"
+                                >
+                                    <div class="crm-contact-section">
+                                        <h4>Marketing</h4>
+                                        <div class="crm-detail-grid">
+                                            <div class="crm-field">
+                                                <label>Company</label>
+                                                <select
+                                                    t-if="can_edit and is_admin"
+                                                    name="company_id"
+                                                    class="form-select"
+                                                >
+                                                    <t t-foreach="companies_list" t-as="comp">
+                                                        <option
+                                                            t-att-value="comp.id"
+                                                            t-att-selected="'selected' if lead.company_id and lead.company_id.id == comp.id else None"
+                                                        >
+                                                            <t t-esc="comp.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    t-else=""
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    t-att-value="lead.company_id.name if lead.company_id else request.env.company.name"
+                                                />
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Campaign</label>
+                                                <select
+                                                    t-if="can_edit"
+                                                    name="campaign_id"
+                                                    class="form-select"
+                                                >
+                                                    <option value="">Select Campaign...</option>
+                                                    <t t-foreach="campaigns" t-as="camp">
+                                                        <option
+                                                            t-att-value="camp.id"
+                                                            t-att-selected="'selected' if lead.campaign_id and lead.campaign_id.id == camp.id else None"
+                                                        >
+                                                            <t t-esc="camp.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    t-else=""
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    t-att-value="lead.campaign_id.name if lead.campaign_id else ''"
+                                                />
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Medium</label>
+                                                <select
+                                                    t-if="can_edit"
+                                                    name="medium_id"
+                                                    class="form-select"
+                                                >
+                                                    <option value="">Select Medium...</option>
+                                                    <t t-foreach="mediums" t-as="med">
+                                                        <option
+                                                            t-att-value="med.id"
+                                                            t-att-selected="'selected' if lead.medium_id and lead.medium_id.id == med.id else None"
+                                                        >
+                                                            <t t-esc="med.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    t-else=""
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    t-att-value="lead.medium_id.name if lead.medium_id else ''"
+                                                />
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Source</label>
+                                                <select
+                                                    t-if="can_edit"
+                                                    name="source_id"
+                                                    class="form-select"
+                                                >
+                                                    <option value="">Select Source...</option>
+                                                    <t t-foreach="sources" t-as="src">
+                                                        <option
+                                                            t-att-value="src.id"
+                                                            t-att-selected="'selected' if lead.source_id and lead.source_id.id == src.id else None"
+                                                        >
+                                                            <t t-esc="src.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    t-else=""
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    t-att-value="lead.source_id.name if lead.source_id else ''"
+                                                />
+                                            </div>
+
+                                            <div class="crm-field">
+                                                <label>Referred By</label>
+                                                <input
+                                                    type="text"
+                                                    name="referred"
+                                                    placeholder="Referred By"
+                                                    t-att-value="lead.referred or ''"
+                                                    t-att-readonly="'readonly' if not can_edit else None"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="crm-contact-section">
+                                        <h4>Analysis</h4>
+                                        <div class="crm-detail-grid">
+                                            <div class="crm-field">
+                                                <label>Assignment Date</label>
+                                                <input
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    t-att-value="lead.date_open or ''"
+                                                    placeholder="Assignment Date"
+                                                />
+                                            </div>
+                                            <div class="crm-field">
+                                                <label>Closed Date</label>
+                                                <input
+                                                    type="text"
+                                                    readonly="readonly"
+                                                    t-att-value="lead.date_closed or ''"
+                                                    placeholder="Closed Date"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- ==================== OPPORTUNITY FORM ==================== -->
+                    <t t-else="">
+                    <input type="hidden" name="stage_id" id="crm_stage_id_select" t-att-value="lead.stage_id.id if lead.stage_id else ''"/>
+                    <div class="crm-detail-section">
+
+                        <h3>Opportunity Information</h3>
+
+                        <div class="crm-detail-grid">
+
+                            <!-- LEFT COLUMN -->
+                            <div class="crm-detail-col">
+
+                                <!-- CONTACT (partner_id) -->
+                                <div class="crm-field">
+                                    <label>
+                                        Contact
+                                    </label>
+                                    <div class="crm-customer-input-group" t-if="can_edit">
+                                        <select
+                                            name="partner_id"
+                                            class="form-select crm-customer-select"
+                                            id="crm_partner_id_select"
+                                        >
+                                            <option value="" t-att-selected="'selected' if not lead.partner_id else None"></option>
+                                            <t t-if="lead.partner_id and lead.partner_id.id not in [c.id for c in all_customers]">
+                                                <option t-att-value="lead.partner_id.id" selected="selected">
+                                                    <t t-esc="lead.partner_id.name"/>
+                                                </option>
+                                            </t>
+                                            <t
+                                                t-foreach="all_customers"
+                                                t-as="cust"
+                                            >
+                                                <option
+                                                    t-att-value="cust.id"
+                                                    t-att-selected="'selected' if lead.partner_id and lead.partner_id.id == cust.id else None"
+                                                >
+                                                    <t t-esc="cust.name"/>
+                                                </option>
+                                            </t>
+                                        </select>
+                                    </div>
+
+                                    <input
+                                        t-else=""
+                                        type="text"
+                                        t-att-value="
+                                            lead.partner_id.name if lead.partner_id else ''
+                                        "
+                                        readonly="readonly"
+                                    />
+                                </div>
+
+                                <div class="crm-field">
+                                    <label>
+                                        Contact Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="contact_name"
+                                        id="crm_opp_contact_name"
+                                        placeholder="Contact Name"
+                                        t-att-value="lead.contact_name or lead.partner_name or (lead.partner_id and lead.partner_id.name) or ''"
+                                        t-att-readonly="'readonly' if not can_edit else None"
+                                    />
+                                </div>
+
+                                <!-- COMPANY NAME (partner_name) -->
+                                <div class="crm-field">
+                                    <label>
+                                        Company Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="partner_name"
+                                        id="crm_opp_partner_name"
+                                        placeholder="Company Name"
+                                        t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.name) or ''"
+                                        t-att-readonly="'readonly' if not can_edit else None"
+                                    />
+                                </div>
+
+                                <!-- EMAIL (email_from) -->
+                                <div class="crm-field">
+                                    <label>
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        name="email_from"
+                                        id="crm_opp_email_from"
+                                        placeholder="Email"
+                                        t-att-value="lead.email_from or (lead.partner_id and lead.partner_id.email) or ''"
+                                        t-att-readonly="'readonly' if not can_edit else None"
+                                    />
+                                </div>
+
+                                <!-- PHONE (phone) -->
+                                <div class="crm-field">
+                                    <label>
+                                        Phone
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="phone"
+                                        id="crm_opp_phone"
+                                        placeholder="Phone"
+                                        t-att-value="lead.phone or (lead.partner_id and lead.partner_id.phone) or ''"
+                                        t-att-readonly="'readonly' if not can_edit else None"
+                                    />
+                                </div>
+
+                            </div>
+
+                            <!-- RIGHT COLUMN -->
+                            <div class="crm-detail-col">
+
+                                <!-- SALESPERSON (user_id) -->
+                                <div class="crm-field">
+                                    <label>
+                                        Salesperson
+                                    </label>
+                                    <select
+                                        t-if="is_admin and can_edit"
+                                        name="user_id"
+                                        class="form-select"
+                                    >
+                                        <option value="">Unassigned</option>
+                                        <t
+                                            t-foreach="salespersons"
+                                            t-as="sp"
+                                        >
+                                            <option
+                                                t-att-value="sp.id"
+                                                t-att-selected="'selected' if (lead.user_id and lead.user_id.id == sp.id) or (not lead.user_id and sp.id == current_user_id) else None"
+                                            >
+                                                <t t-esc="sp.name"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                    <t t-else="">
+                                        <input
+                                            type="text"
+                                            t-att-value="lead.user_id.name if lead.user_id else request.env.user.name"
+                                            readonly="readonly"
+                                        />
+                                        <input type="hidden" name="user_id" t-att-value="lead.user_id.id if lead.user_id else request.env.user.id"/>
+                                    </t>
+                                </div>
+
+                                <!-- EXPECTED CLOSING (date_deadline + priority) -->
+                                <div class="crm-field">
+                                    <label>
+                                        Expected Closing
+                                    </label>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <input
+                                            type="date"
+                                            name="date_deadline"
+                                            class="form-control"
+                                            t-att-value="lead.date_deadline or ''"
+                                            t-att-readonly="'readonly' if not can_edit else None"
+                                        />
+                                        <select
+                                            name="priority"
+                                            class="form-select w-auto"
+                                            t-att-disabled="'disabled' if not can_edit else None"
+                                        >
+                                            <option value="0" t-att-selected="'selected' if lead.priority == '0' else None">☆☆☆</option>
+                                            <option value="1" t-att-selected="'selected' if lead.priority == '1' else None">★☆☆</option>
+                                            <option value="2" t-att-selected="'selected' if lead.priority == '2' else None">★★☆</option>
+                                            <option value="3" t-att-selected="'selected' if lead.priority == '3' else None">★★★</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- TAGS (tag_ids) -->
+                                <div class="crm-field">
+                                    <label>Tags</label>
+                                    <input t-if="can_edit" type="hidden" name="has_tags_field" value="1"/>
+                                    <div t-att-class="'crm-tag-widget' if can_edit else 'crm-tag-widget crm-tag-widget-readonly'">
+                                        <div class="crm-tag-chips-wrapper">
+                                            <t t-foreach="tags" t-as="tg">
+                                                <span t-if="lead and tg.id in lead.tag_ids.ids"
+                                                      t-attf-class="crm-tag-pill crm-tag-color-{{ tg.color or 0 }}"
+                                                      t-att-data-id="tg.id"
+                                                      t-att-data-name="tg.name"
+                                                      t-att-data-color="tg.color or 0">
+                                                    <span class="crm-tag-text"><t t-esc="tg.name"/></span>
+                                                    <button t-if="can_edit" type="button" class="crm-tag-remove" t-att-data-id="tg.id" aria-label="Remove">&amp;times;</button>
+                                                    <input t-if="can_edit" type="hidden" name="tag_ids" t-att-value="tg.id"/>
+                                                </span>
+                                            </t>
+                                            <span t-if="not can_edit and (not lead or not lead.tag_ids)" class="crm-tag-empty-text">None</span>
+                                        </div>
+                                        <input t-if="can_edit" type="text" class="crm-tag-input" autocomplete="off" placeholder=""/>
+                                        <span t-if="can_edit" class="crm-tag-caret fa fa-caret-down"></span>
+                                        <div t-if="can_edit" class="crm-tag-dropdown">
+                                            <t t-foreach="tags" t-as="tg">
+                                                <div t-att-class="'crm-tag-dropdown-item d-none' if (lead and tg.id in lead.tag_ids.ids) else 'crm-tag-dropdown-item'"
+                                                     t-att-data-id="tg.id"
+                                                     t-att-data-name="tg.name"
+                                                     t-att-data-color="tg.color or 0">
+                                                    <span t-attf-class="crm-tag-badge-preview crm-tag-color-{{ tg.color or 0 }}">
+                                                        <t t-esc="tg.name"/>
+                                                    </span>
+                                                </div>
+                                            </t>
+                                            <div class="crm-tag-dropdown-empty d-none">No tags found</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ====================================== -->
+                    <!-- NOTEBOOK -->
+                    <!-- ====================================== -->
+
+                    <div class="crm-notebook">
+                        <input
+                            type="radio"
+                            id="detail_notes_tab"
+                            name="detail_notebook"
+                            checked="checked"
+                        />
+                        <label for="detail_notes_tab">
+                            Notes
+                        </label>
+                        <input
+                            type="radio"
+                            id="detail_contacts_tab"
+                            name="detail_notebook"
+                        />
+
+                        <label for="detail_contacts_tab">
+                            Contacts
+                        </label>
+
+
+                        <div class="crm-notebook-content">
+
+                            <!-- ================================= -->
+                            <!-- NOTES -->
+                            <!-- ================================= -->
+
+                            <section
+                                id="detail_notes_page"
+                                class="crm-notebook-page crm-notes-page"
+                            >
+
+                                <div class="crm-field">
+                                    <label>
+                                        Notes
+                                    </label>
+                                    <textarea
+                                        name="description"
+                                        rows="10"
+                                        t-att-readonly="
+                                            'readonly'
+                                            if not can_edit
+                                            else None
+                                        "
+                                    ><t
+                                        t-esc="
+                                            description_text or ''
+                                        "
+                                    /></textarea>
+                                </div>
+                            </section>
+
+
+                            <!-- ================================= -->
+                            <!-- CONTACTS -->
+                            <!-- ================================= -->
+
+                            <section
+                                id="detail_contacts_page"
+                                class="crm-notebook-page crm-contacts-page"
+                            >
+
+                                <!-- COMPANY -->
+
+                                <div class="crm-contact-section">
+                                    <h4>
+                                        Company Information
+                                    </h4>
+                                    <div class="crm-field">
+                                        <label>Address</label>
+                                        <div class="crm-address-inputs">
+                                            <input
+                                                type="text"
+                                                name="partner_street"
+                                                id="crm_partner_street"
+                                                placeholder="Street..."
+                                                class="mb-2"
+                                                t-att-value="lead.street or (partner and partner.street) or ''"
+                                                t-att-readonly="'readonly' if not can_edit else None"
+                                            />
+                                            <input
+                                                type="text"
+                                                name="partner_street2"
+                                                id="crm_partner_street2"
+                                                placeholder="Street 2..."
+                                                class="mb-2"
+                                                t-att-value="lead.street2 or (partner and partner.street2) or ''"
+                                                t-att-readonly="'readonly' if not can_edit else None"
+                                            />
+                                            <div class="crm-address-row mb-2">
+                                                <input
+                                                    type="text"
+                                                    name="partner_city"
+                                                    id="crm_partner_city"
+                                                    placeholder="City"
+                                                    t-att-value="lead.city or (partner and partner.city) or ''"
+                                                    t-att-readonly="'readonly' if not can_edit else None"
+                                                />
+                                                <select
+                                                    name="partner_state_id"
+                                                    id="crm_partner_state_id"
+                                                    t-att-disabled="'disabled' if not can_edit else None"
+                                                >
+                                                    <option value="">State</option>
+                                                    <t t-foreach="states" t-as="st">
+                                                        <option
+                                                            t-att-value="st.id"
+                                                            t-att-selected="'selected' if (lead.state_id and lead.state_id.id == st.id) or (partner and partner.state_id and partner.state_id.id == st.id) else None"
+                                                        >
+                                                            <t t-esc="st.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    name="partner_zip"
+                                                    id="crm_partner_zip"
+                                                    placeholder="ZIP"
+                                                    t-att-value="lead.zip or (partner and partner.zip) or ''"
+                                                    t-att-readonly="'readonly' if not can_edit else None"
+                                                />
+                                            </div>
+                                            <select
+                                                name="partner_country_id"
+                                                id="crm_partner_country_id"
+                                                t-att-disabled="'disabled' if not can_edit else None"
+                                            >
+                                                <option value="">Country</option>
+                                                <t t-foreach="countries" t-as="cntry">
+                                                    <option
+                                                        t-att-value="cntry.id"
+                                                        t-att-selected="'selected' if (lead.country_id and lead.country_id.id == cntry.id) or (partner and partner.country_id and partner.country_id.id == cntry.id) else None"
+                                                    >
+                                                        <t t-esc="cntry.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- CONTACT -->
+
+                                <div class="crm-contact-section">
+                                    <h4>
+                                        Contact Information
+                                    </h4>
+                                    <div class="crm-detail-grid">
+                                        <div class="crm-field">
+                                            <label>
+                                                Contact Name
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="contact_name"
+                                                id="crm_contact_name"
+                                                list="crm_contact_name_list"
+                                                autocomplete="off"
+                                                placeholder="Contact Name"
+                                                t-att-value="
+                                                    lead.contact_name or ''
+                                                "
+                                                t-att-readonly="
+                                                    'readonly'
+                                                    if not can_edit
+                                                    else None
+                                                "
+                                            />
+                                            <datalist id="crm_contact_name_list"></datalist>
+                                        </div>
+                                        <div class="crm-field">
+                                            <label>
+                                                Website
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="website"
+                                                id="crm_website"
+                                                placeholder="Website"
+                                                t-att-value="
+                                                    lead.website or (lead.partner_id and lead.partner_id.website) or ''
+                                                "
+                                                t-att-readonly="
+                                                    'readonly'
+                                                    if not can_edit
+                                                    else None
+                                                "
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- MARKETING -->
+                                <div class="crm-contact-section">
+                                    <h4>
+                                        Marketing
+                                    </h4>
+                                    <div class="crm-detail-grid">
+
+                                        <div class="crm-field">
+
+                                            <label>
+                                                Campaign
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                t-att-value="
+                                                    lead.campaign_id
+                                                    and lead.campaign_id.name
+                                                    or ''
+                                                "
+                                                readonly="readonly"
+                                            />
+                                        </div>
+                                        <div class="crm-field">
+                                            <label>
+                                                Medium
+                                            </label>
+                                            <input
+                                                type="text"
+                                                t-att-value="
+                                                    lead.medium_id
+                                                    and lead.medium_id.name
+                                                    or ''
+                                                "
+                                                readonly="readonly"
+                                            />
+                                        </div>
+                                        <div class="crm-field">
+
+                                            <label>
+                                                Source
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                t-att-value="
+                                                    lead.source_id
+                                                    and lead.source_id.name
+                                                    or ''
+                                                "
+                                                readonly="readonly"
+                                            />
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+                                <!-- OWNERSHIP -->
+
+                                <div class="crm-contact-section">
+                                    <h4>
+                                        Ownership
+                                    </h4>
+                                    <div class="crm-detail-grid">
+
+                                        <div class="crm-field">
+                                            <label>
+                                                Salesperson
+                                            </label>
+                                            <select
+                                                t-if="is_admin and can_edit"
+                                                name="user_id"
+                                                class="form-select"
+                                            >
+                                                <option value="">Unassigned</option>
+                                                <t
+                                                    t-foreach="salespersons"
+                                                    t-as="sp"
+                                                >
+                                                    <option
+                                                        t-att-value="sp.id"
+                                                        t-att-selected="'selected' if (lead.user_id and lead.user_id.id == sp.id) or (not lead.user_id and sp.id == current_user_id) else None"
+                                                    >
+                                                        <t t-esc="sp.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                            <t t-else="">
+                                                <input
+                                                    type="text"
+                                                    t-att-value="lead.user_id.name if lead.user_id else request.env.user.name"
+                                                    readonly="readonly"
+                                                />
+                                                <input type="hidden" name="user_id" t-att-value="lead.user_id.id if lead.user_id else request.env.user.id"/>
+                                            </t>
+                                        </div>
+                                        <div class="crm-field">
+                                            <label>
+                                                Sales Team
+                                            </label>
+                                            <input
+                                                type="text"
+                                                t-att-value="
+                                                    lead.team_id
+                                                    and lead.team_id.name
+                                                    or (request.env.user.sale_team_id.name if getattr(request.env.user, 'sale_team_id', False) else '')
+                                                "
+                                                readonly="readonly"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                    </t>
+                    <!-- FOOTER -->
+                    <div class="crm-detail-footer">
+
+                        <a
+                            href="/my/crm"
+                            class="btn crm-btn-outline">
+                            Back
+                        </a>
+                        <button
+                            t-if="can_edit"
+                            type="submit"
+                            class="btn crm-btn-primary">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+</odoo>

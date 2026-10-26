@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="crm_portal.PortalCRM" owl="1">
+
+        <div class="crm-portal-app">
+
+            <div class="crm-portal-welcome">
+                <h2>
+                    Hello, <t t-esc="state.currentUserName || 'there'"/>!
+                </h2>
+                <p t-if="state.filter === 'leads'">Welcome to your CRM leads. Here is an overview of your leads.</p>
+                <p t-else="">Welcome back to your CRM pipeline. Here is an overview of your opportunities.</p>
+            </div>
+
+            <!-- ===================== TOOLBAR ===================== -->
+            <div class="crm-portal-toolbar">
+
+                <div class="crm-portal-search">
+                    <span class="fa fa-search crm-search-icon"/>
+                    <input
+                        type="text"
+                        class="form-control"
+                        t-att-placeholder="state.filter === 'leads' ? 'Search leads...' : 'Search opportunities...'"
+                        t-model="state.search"
+                    />
+                </div>
+
+                <div class="crm-portal-actions">
+
+                    <button
+                        type="button"
+                        class="btn crm-toolbar-btn"
+                        t-on-click="toggleFilters"
+                    >
+                        <span class="fa fa-filter me-1"/>
+                        Filters
+                    </button>
+
+                    <button
+                        t-if="state.canEdit"
+                        type="button"
+                        class="btn crm-btn-new-opportunity"
+                        t-on-click="newOpportunity"
+                    >
+                        <span class="fa fa-plus me-1"/>
+                        New Opportunity
+                    </button>
+
+                    <button
+                        t-if="state.canEdit"
+                        type="button"
+                        class="btn crm-btn-new-lead"
+                        t-on-click="newLead"
+                    >
+                        <span class="fa fa-plus me-1"/>
+                        New Lead
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn crm-toolbar-btn crm-toolbar-btn-icon"
+                        t-on-click="refresh"
+                        title="Refresh"
+                    >
+                        <span class="fa fa-refresh"/>
+                    </button>
+
+                </div>
+
+                <!-- View switcher -->
+                <div class="crm-portal-view-switcher" role="group" aria-label="CRM views">
+                    <button
+                        type="button"
+                        t-att-class="state.view == 'kanban' ? 'crm-view-btn crm-view-btn-active' : 'crm-view-btn'"
+                        t-on-click="switchToKanban"
+                        title="Pipeline Kanban"
+                    >
+                        <span class="fa fa-th-large"/>
+                    </button>
+                    <button
+                        type="button"
+                        t-att-class="state.view == 'list' ? 'crm-view-btn crm-view-btn-active' : 'crm-view-btn'"
+                        t-on-click="switchToList"
+                        title="List view"
+                    >
+                        <span class="fa fa-list"/>
+                    </button>
+                    <button
+                        type="button"
+                        t-att-class="state.view == 'calendar' ? 'crm-view-btn crm-view-btn-active' : 'crm-view-btn'"
+                        t-on-click="switchToCalendar"
+                        title="Calendar view"
+                    >
+                        <span class="fa fa-calendar"/>
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- ===================== FILTERS ===================== -->
+            <div t-if="state.showFilters" class="crm-portal-filters">
+
+                <div class="crm-filter-group">
+                    <label>Status</label>
+                    <div class="crm-filter-chips">
+                        <button type="button"
+                            t-att-class="state.filter == 'all' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
+                            t-on-click="() => setFilter('all')">Opportunity</button>
+                        <button type="button"
+                            t-att-class="state.filter == 'leads' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
+                            t-on-click="() => setFilter('leads')">Leads</button>
+                        <button type="button"
+                            t-att-class="state.filter == 'open' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
+                            t-on-click="() => setFilter('open')">Open</button>
+                        <button type="button"
+                            t-att-class="state.filter == 'won' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
+                            t-on-click="() => setFilter('won')">Won</button>
+                        <button type="button"
+                            t-att-class="state.filter == 'lost' ? 'crm-filter-chip crm-filter-chip-lost crm-filter-chip-active' : 'crm-filter-chip crm-filter-chip-lost'"
+                            t-on-click="() => setFilter('lost')">Lost</button>
+                    </div>
+                </div>
+
+                <div class="crm-filter-group" t-if="state.filter != 'leads'">
+                    <label for="crm_stage_filter">Stage</label>
+                    <select
+                        id="crm_stage_filter"
+                        class="form-select form-select-sm crm-filter-select"
+                        t-model="state.stageFilter"
+                        t-on-change="onStageFilterChange"
+                    >
+                        <option value="all">All stages</option>
+                        <option
+                            t-foreach="state.stages"
+                            t-as="stage"
+                            t-key="stage.id"
+                            t-att-value="stage.id"
+                        >
+                            <t t-esc="stage.name"/>
+                        </option>
+                    </select>
+                </div>
+
+                <div class="crm-filter-group crm-filter-clear">
+                    <button type="button" class="btn btn-sm crm-filter-clear-btn" t-on-click="clearFilters">
+                        <span class="fa fa-times me-1"/>
+                        Clear filters
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- ===================== ERROR ===================== -->
+            <div t-if="state.error" class="alert alert-danger mt-2">
+                <t t-esc="state.error"/>
+            </div>
+
+            <!-- ===================== LOADING ===================== -->
+            <div t-if="state.loading" class="crm-loading-state">
+                <span class="fa fa-spinner fa-spin fa-2x"/>
+                <div class="mt-2">Loading CRM...</div>
+            </div>
+
+            <!-- ===================== CONTENT ===================== -->
+            <t t-if="!state.loading">
+
+                <!-- Empty state -->
+                <div
+                    t-if="filteredLeads.length === 0"
+                    class="crm-portal-empty"
+                >
+                    <span class="fa fa-folder-open-o crm-empty-icon"/>
+                    <h4>No <t t-esc="state.filter === 'leads' ? 'leads' : 'opportunities'"/> found</h4>
+                    <p class="text-muted">
+                        <t t-if="state.filter === 'leads'">No CRM leads match your current view.</t>
+                        <t t-else="">No CRM opportunities match your current view.</t>
+                    </p>
+                    <button
+                        t-if="state.canEdit"
+                        type="button"
+                        class="btn crm-btn-new-lead mt-2"
+                        t-on-click="handleEmptyCreate"
+                    >
+                        <t t-esc="state.filter === 'leads' ? 'Create Lead' : 'Create Opportunity'"/>
+                    </button>
+                </div>
+
+                <!-- ==================== KANBAN ==================== -->
+                <div
+                    t-if="state.view === 'kanban' and state.filter != 'leads' and state.leads.length"
+                    class="crm-kanban"
+                >
+
+                    <div
+                        t-foreach="kanbanColumns"
+                        t-as="stage"
+                        t-key="stage.id"
+                        t-att-class="stage.isLostColumn ? 'crm-kanban-column crm-kanban-lost-column' : 'crm-kanban-column crm-kanban-col-' + stage_index"
+                        t-on-dragover="(ev) => allowDrop(ev, stage)"
+                        t-on-drop="(ev) => dropLead(stage.id, ev)"
+                    >
+
+                        <!-- Column header -->
+                        <div class="crm-kanban-column-header">
+                            <div class="crm-col-header-row">
+                                <h3 class="crm-col-title">
+                                    <t t-esc="stage.name"/>
+                                </h3>
+                                <span class="crm-col-count-badge">
+                                    <t t-esc="getStageLeads(stage.id).length"/>
+                                </span>
+                            </div>
+                            <div class="crm-stage-revenue" t-if="!stage.isLostColumn">
+                                <t t-esc="formatCurrency(stageRevenue(stage.id))"/>
+                            </div>
+                            <div class="crm-stage-revenue crm-lost-column-subtitle" t-else="">
+                                Closed opportunities
+                            </div>
+                        </div>
+
+                        <!-- Cards -->
+                        <div class="crm-kanban-cards">
+
+                            <article
+                                t-foreach="getStageLeads(stage.id)"
+                                t-as="lead"
+                                t-key="lead.id"
+                                class="crm-lead-card"
+                                t-att-draggable="canDrag(stage, lead) ? 'true' : 'false'"
+                                t-on-dragstart="(ev) => startDrag(lead, ev)"
+                                t-on-dragend="clearDrag"
+                                t-on-click="() => openLead(lead)"
+                            >
+
+                                <!-- Title + menu -->
+                                <div class="crm-card-title-row">
+                                    <span class="crm-card-title">
+                                        <t t-esc="lead.name"/>
+                                    </span>
+                                    <span t-if="isLost(lead)" class="crm-portal-lost-badge">
+                                        <i class="fa fa-times-circle me-1"/> LOST
+                                    </span>
+                                    <button
+                                        type="button"
+                                        class="crm-card-menu"
+                                        t-on-click.stop="() => openLead(lead)"
+                                        title="Options"
+                                    >
+                                        <span class="fa fa-ellipsis-v"/>
+                                    </button>
+                                </div>
+
+                                <!-- Company / Customer -->
+                                <div t-if="lead.partner_id || lead.partner_name" class="crm-card-info-row">
+                                    <span class="fa fa-building-o crm-card-info-icon"/>
+                                    <span class="crm-card-info-text">
+                                        <t t-esc="lead.partner_id ? lead.partner_id[1] : lead.partner_name"/>
+                                    </span>
+                                </div>
+
+                                <!-- Contact -->
+                                <div t-if="lead.contact_name" class="crm-card-info-row">
+                                    <span class="fa fa-user crm-card-info-icon"/>
+                                    <span class="crm-card-info-text">
+                                        <t t-esc="lead.contact_name"/>
+                                    </span>
+                                </div>
+
+                                <!-- Revenue + Probability badge -->
+                                <div class="crm-card-bottom">
+                                    <span class="crm-card-revenue">
+                                        <t t-esc="formatCurrency(lead.expected_revenue)"/>
+                                    </span>
+                                    <span t-if="lead.probability" class="crm-card-prob">
+                                        <t t-esc="Math.round(lead.probability)"/>%
+                                    </span>
+                                </div>
+
+                                <!-- Relative date -->
+                                <div t-if="lead.date_deadline" class="crm-card-info-row crm-card-date-row">
+                                    <span class="fa fa-calendar-o crm-card-info-icon"/>
+                                    <span class="crm-card-info-text">
+                                        <t t-esc="relativeDate(lead.date_deadline)"/>
+                                    </span>
+                                </div>
+
+                            </article>
+
+                            <!-- Empty column state -->
+                            <div
+                                t-if="!getStageLeads(stage.id).length"
+                                class="crm-empty-column"
+                            >
+                                <t t-if="isWonStage(stage)">
+                                    <span class="fa fa-trophy crm-trophy-icon"/>
+                                    <div class="crm-empty-won-title">No won leads yet</div>
+                                    <div class="crm-empty-won-sub">Great work! Keep it up.</div>
+                                </t>
+                                <t t-elif="stage.isLostColumn">
+                                    <div class="crm-empty-won-title">No lost opportunities</div>
+                                </t>
+                                <t t-else="">
+                                    <span class="crm-empty-drop-hint">Drop opportunity here</span>
+                                </t>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- ========================= -->
+                <!-- LIST -->
+                <!-- ========================= -->
+
+                <div
+                    t-if="state.view === 'list' and state.leads.length"
+                    class="crm-list-wrapper table-responsive"
+                >
+                    <table class="crm-list-table">
+                        <thead>
+                            <tr>
+                                <th><t t-esc="state.filter === 'leads' ? 'Lead' : 'Opportunity'"/></th>
+                                <th>Customer</th>
+                                <th t-if="state.filter != 'leads'">Stage</th>
+                                <th>Expected Revenue</th>
+                                <th>Probability</th>
+                                <th>Deadline</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                t-foreach="filteredLeads"
+                                t-as="lead"
+                                t-key="lead.id"
+                                t-on-click="() => openLead(lead)"
+                            >
+                                <td><strong><t t-esc="lead.name"/></strong></td>
+                                <td><t t-esc="lead.partner_id ? lead.partner_id[1] : (lead.partner_name || lead.contact_name || '')"/></td>
+                                <td t-if="state.filter != 'leads'"><t t-esc="lead.stage_id ? lead.stage_id[1] : ''"/></td>
+                                <td><t t-esc="formatCurrency(lead.expected_revenue)"/></td>
+                                <td><t t-esc="lead.probability"/>%</td>
+                                <td><t t-esc="lead.date_deadline || ''"/></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- ========================= -->
+                <!-- CALENDAR -->
+                <!-- ========================= -->
+
+                <div
+                    t-if="state.view === 'calendar'"
+                    class="crm-calendar"
+                >
+
+                    <div class="crm-calendar-header">
+                        <button type="button" class="btn btn-light" t-on-click="previousMonth">
+                            <span class="fa fa-chevron-left"/>
+                        </button>
+                        <button type="button" class="btn btn-light" t-on-click="goToday">
+                            Today
+                        </button>
+                        <button type="button" class="btn btn-light" t-on-click="nextMonth">
+                            <span class="fa fa-chevron-right"/>
+                        </button>
+                        <h4 class="mb-0 ms-3"><t t-esc="monthTitle"/></h4>
+                    </div>
+
+                    <div class="crm-calendar-weekdays">
+                        <div
+                            t-foreach="['Mon','Tue','Wed','Thu','Fri','Sat','Sun']"
+                            t-as="day"
+                            t-key="day"
+                        >
+                            <t t-esc="day"/>
+                        </div>
+                    </div>
+
+                    <div class="crm-calendar-grid">
+                        <t
+                            t-foreach="calendarWeeks"
+                            t-as="week"
+                            t-key="week_index"
+                        >
+                            <div
+                                t-foreach="week"
+                                t-as="day"
+                                t-key="day.key"
+                                t-att-class="day.inMonth ? 'crm-calendar-day' : 'crm-calendar-day crm-calendar-day-other'"
+                            >
+                                <div class="crm-calendar-date">
+                                    <t t-esc="day.date.getDate()"/>
+                                </div>
+                                <div class="crm-calendar-events">
+                                    <div
+                                        t-foreach="day.leads"
+                                        t-as="lead"
+                                        t-key="lead.id"
+                                        class="crm-calendar-lead"
+                                        t-on-click="() => openLead(lead)"
+                                    >
+                                        <t t-esc="lead.name"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

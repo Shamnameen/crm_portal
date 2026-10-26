@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="crm_team_form_portal_salespersons" model="ir.ui.view">
+        <field name="name">crm.team.form.portal.salespersons</field>
+        <field name="model">crm.team</field>
+        <field name="inherit_id" ref="sales_team.crm_team_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='member_ids']" position="attributes">
+                <attribute name="domain">[('active', '=', True), ('company_ids', 'in', member_company_ids)]</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="crm_lead_form_portal_salesperson"
+            model="ir.ui.view">
+        <field name="name">crm.lead.form.portal.salesperson</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Opportunity salesperson -->
+            <xpath expr="(//field[@name='user_id'])[1]"
+                   position="attributes">
+                <attribute name="domain">[('active', '=', True)]</attribute>
+                <attribute name="widget">many2one_avatar_user</attribute>
+            </xpath>
+
+            <!-- Lead salesperson -->
+            <xpath expr="(//field[@name='user_id'])[2]"
+                   position="attributes">
+                <attribute name="domain">[('active', '=', True)]</attribute>
+                <attribute name="widget">many2one_avatar_user</attribute>
+            </xpath>
+
+            <!-- Show Contact Name and Company Name Char fields on Opportunities in backend -->
+            <xpath expr="//group[@name='opportunity_partner']/field[@name='partner_id']"
+                   position="after">
+                <field name="contact_name" placeholder="Contact Name"/>
+                <field name="partner_name" string="Company Name" placeholder="Company Name"/>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>
