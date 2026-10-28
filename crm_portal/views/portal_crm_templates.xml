@@ -195,32 +195,7 @@
                     </div>
 
 
-                    <!-- STAGE -->
 
-                    <div class="crm-stage-bar" t-if="record_type != 'lead'">
-
-                        <t
-                            t-foreach="stages"
-                            t-as="stage"
-                        >
-
-                            <div
-                                    t-att-class="
-                                        'crm-stage-item crm-stage-active'
-                                        if default_stage and stage.id == default_stage.id
-                                        else 'crm-stage-item'
-                                    "
-                                    t-att-data-stage-id="stage.id"
-                                    t-att-data-is-won="'1' if (stage.is_won or 'won' in (stage.name or '').lower()) else '0'"
-                            >
-
-                                <t t-esc="stage.name"/>
-
-                            </div>
-
-                        </t>
-
-                    </div>
 
 
                     <!-- ==================== LEAD FORM ==================== -->
@@ -230,6 +205,9 @@
                             <div class="crm-detail-grid">
                                 <!-- LEFT COLUMN -->
                                 <div class="crm-detail-col">
+
+
+
                                     <div class="crm-field">
                                         <label>Company Name</label>
                                         <input
@@ -588,36 +566,13 @@
                                                 <option
                                                     t-att-value="cust.id"
                                                 >
-                                                    <t t-esc="cust.name"/>
+                                                    <t t-esc="cust.display_name or cust.name"/>
                                                 </option>
                                             </t>
                                         </select>
                                     </div>
                                 </div>
 
-                                <div class="crm-field">
-                                    <label>
-                                        Contact Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="contact_name"
-                                        id="crm_opp_contact_name"
-                                        placeholder="Contact Name"
-                                    />
-                                </div>
-
-                                <div class="crm-field">
-                                    <label>
-                                        Company Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="partner_name"
-                                        id="crm_opp_partner_name"
-                                        placeholder="Company Name"
-                                    />
-                                </div>
 
                                 <div class="crm-field">
                                     <label>
@@ -783,6 +738,18 @@
                                     <h4>
                                         Company Information
                                     </h4>
+
+                                    <div class="crm-field">
+                                        <label>
+                                            Company Name
+                                        </label>
+                                        <input
+                                                type="text"
+                                                name="partner_name"
+                                                id="crm_opp_partner_name"
+                                                placeholder="Company Name"
+                                        />
+                                    </div>
 
                                     <div class="crm-field">
                                         <label>Address</label>
@@ -1076,7 +1043,7 @@
                                                                 <input type="checkbox" name="duplicated_lead_ids" t-att-value="mo.id" checked="checked"/>
                                                             </td>
                                                             <td><t t-esc="mo.name"/></td>
-                                                            <td><t t-esc="mo.contact_name or mo.partner_name or ''"/></td>
+                                                            <td><t t-esc="(mo.partner_id and mo.partner_id.display_name) or (mo.partner_name and mo.contact_name and (mo.partner_name + ', ' + mo.contact_name)) or mo.contact_name or mo.partner_name or ''"/></td>
                                                             <td><t t-esc="mo.stage_id.name if mo.stage_id else ''"/></td>
                                                         </tr>
                                                     </t>
@@ -1120,7 +1087,7 @@
                                                         <option value="">Select an existing customer...</option>
                                                         <t t-foreach="all_customers" t-as="cust">
                                                             <option t-att-value="cust.id" t-att-selected="'selected' if lead.partner_id and lead.partner_id.id == cust.id else None">
-                                                                <t t-esc="cust.name"/>
+                                                                <t t-esc="cust.display_name or cust.name"/>
                                                             </option>
                                                         </t>
                                                     </select>
@@ -1237,7 +1204,7 @@
                                 <span>
                                     <t
                                         t-esc="
-                                            lead.partner_id.name"/>
+                                            lead.partner_id.display_name or lead.partner_id.name"/>
                                 </span>
                             </div>
                         </div>
@@ -1328,6 +1295,7 @@
                             <div class="crm-detail-grid">
                                 <!-- LEFT COLUMN -->
                                 <div class="crm-detail-col">
+
                                     <div class="crm-field">
                                         <label>Company Name</label>
                                         <input
@@ -1335,7 +1303,7 @@
                                             name="partner_name"
                                             id="crm_partner_name"
                                             placeholder="Company Name"
-                                            t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.name) or ''"
+                                            t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.is_company and lead.partner_id.name) or (lead.partner_id and lead.partner_id.parent_id and lead.partner_id.parent_id.name) or ''"
                                             t-att-readonly="'readonly' if not can_edit else None"
                                         />
                                     </div>
@@ -1501,7 +1469,7 @@
                                             name="contact_name"
                                             id="crm_contact_name"
                                             placeholder="Enter contact name"
-                                            t-att-value="lead.contact_name or ''"
+                                            t-att-value="lead.contact_name or (lead.partner_id and not lead.partner_id.is_company and lead.partner_id.name) or ''"
                                         />
                                     </div>
 
@@ -1800,7 +1768,7 @@
                                             <option value="" t-att-selected="'selected' if not lead.partner_id else None"></option>
                                             <t t-if="lead.partner_id and lead.partner_id.id not in [c.id for c in all_customers]">
                                                 <option t-att-value="lead.partner_id.id" selected="selected">
-                                                    <t t-esc="lead.partner_id.name"/>
+                                                    <t t-esc="lead.partner_id.display_name or lead.partner_id.name"/>
                                                 </option>
                                             </t>
                                             <t
@@ -1811,7 +1779,7 @@
                                                     t-att-value="cust.id"
                                                     t-att-selected="'selected' if lead.partner_id and lead.partner_id.id == cust.id else None"
                                                 >
-                                                    <t t-esc="cust.name"/>
+                                                    <t t-esc="cust.display_name or cust.name"/>
                                                 </option>
                                             </t>
                                         </select>
@@ -1821,40 +1789,12 @@
                                         t-else=""
                                         type="text"
                                         t-att-value="
-                                            lead.partner_id.name if lead.partner_id else ''
+                                            (lead.partner_id.display_name or lead.partner_id.name) if lead.partner_id else ''
                                         "
                                         readonly="readonly"
                                     />
                                 </div>
 
-                                <div class="crm-field">
-                                    <label>
-                                        Contact Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="contact_name"
-                                        id="crm_opp_contact_name"
-                                        placeholder="Contact Name"
-                                        t-att-value="lead.contact_name or lead.partner_name or (lead.partner_id and lead.partner_id.name) or ''"
-                                        t-att-readonly="'readonly' if not can_edit else None"
-                                    />
-                                </div>
-
-                                <!-- COMPANY NAME (partner_name) -->
-                                <div class="crm-field">
-                                    <label>
-                                        Company Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="partner_name"
-                                        id="crm_opp_partner_name"
-                                        placeholder="Company Name"
-                                        t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.name) or ''"
-                                        t-att-readonly="'readonly' if not can_edit else None"
-                                    />
-                                </div>
 
                                 <!-- EMAIL (email_from) -->
                                 <div class="crm-field">
@@ -2062,6 +2002,19 @@
                                         Company Information
                                     </h4>
                                     <div class="crm-field">
+                                            <label>
+                                                Company Name
+                                            </label>
+                                            <input
+                                                    type="text"
+                                                    name="partner_name"
+                                                    id="crm_opp_partner_name"
+                                                    placeholder="Company Name"
+                                                    t-att-value="lead.partner_name or (lead.company_partner_id and lead.company_partner_id.name) or (lead.partner_id and lead.partner_id.is_company and lead.partner_id.name) or (lead.partner_id and lead.partner_id.parent_id and lead.partner_id.parent_id.name) or ''"
+                                                    t-att-readonly="'readonly' if not can_edit else None"
+                                            />
+
+
                                         <label>Address</label>
                                         <div class="crm-address-inputs">
                                             <input
@@ -2286,11 +2239,7 @@
                                             </label>
                                             <input
                                                 type="text"
-                                                t-att-value="
-                                                    lead.team_id
-                                                    and lead.team_id.name
-                                                    or (request.env.user.sale_team_id.name if getattr(request.env.user, 'sale_team_id', False) else '')
-                                                "
+                                                t-att-value="lead.team_id.name if lead.team_id else (request.env.user.sale_team_id.name if request.env.user.sale_team_id else '')"
                                                 readonly="readonly"
                                             />
                                         </div>

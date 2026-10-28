@@ -1,6 +1,7 @@
 import {
     Component,
     onWillStart,
+    onWillUnmount,
     useState,
 } from "@odoo/owl";
 
@@ -20,6 +21,7 @@ export class PortalCRM extends Component {
             new URLSearchParams(window.location.search);
         const initialFilter =
             urlParams.get("filter");
+        const defaultFilter = (initialFilter === "all" || !initialFilter) ? "opportunity" : initialFilter;
 
         this.state = useState({
 
@@ -33,6 +35,10 @@ export class PortalCRM extends Component {
 
             canEdit: false,
 
+            isAdmin: false,
+
+            salespersons: [],
+
             currentUserId: false,
 
             currentPartnerId: false,
@@ -41,15 +47,29 @@ export class PortalCRM extends Component {
 
             currencySymbol: "$",
 
-            view: initialFilter === "leads" ? "list" : (urlParams.get("view") || "kanban"),
+            view: (defaultFilter === "leads" || defaultFilter === "lost_leads") ? "list" : (urlParams.get("view") || "kanban"),
 
             search: "",
 
-            filter: initialFilter || "all",
+            filter: defaultFilter,
 
             stageFilter: "all",
 
-            showFilters: initialFilter === "leads",
+            showFilters: (defaultFilter === "leads" || defaultFilter === "lost_leads"),
+
+            showSearchDropdown: false,
+
+            showCreationDateSubmenu: false,
+
+            showSalespersonSubmenu: false,
+
+            creationDateFilter: null,
+
+            selectedSalespersonId: null,
+
+            customStartDate: "",
+
+            customEndDate: "",
 
             currentMonth: new Date(
                 new Date().getFullYear(),
@@ -122,11 +142,58 @@ export class PortalCRM extends Component {
         this.clearDrag =
             this.clearDrag.bind(this);
 
+        this.restoreLead =
+            this.restoreLead.bind(this);
+
         this.refresh =
             this.refresh.bind(this);
 
         this.loadCRM =
             this.loadCRM.bind(this);
+
+        this.toggleSearchDropdown =
+            this.toggleSearchDropdown.bind(this);
+
+        this.toggleLostLeadFilter =
+            this.toggleLostLeadFilter.bind(this);
+
+        this.removeLostLeadFilter =
+            this.removeLostLeadFilter.bind(this);
+
+        this.toggleCreationDateSubmenu =
+            this.toggleCreationDateSubmenu.bind(this);
+
+        this.toggleSalespersonSubmenu =
+            this.toggleSalespersonSubmenu.bind(this);
+
+        this.setCreationDateFilter =
+            this.setCreationDateFilter.bind(this);
+
+        this.removeCreationDateFilter =
+            this.removeCreationDateFilter.bind(this);
+
+        this.applyCustomDateRange =
+            this.applyCustomDateRange.bind(this);
+
+        this.setSalespersonFilter =
+            this.setSalespersonFilter.bind(this);
+
+        this.removeSalespersonFilter =
+            this.removeSalespersonFilter.bind(this);
+
+        this.onDocumentClick = (event) => {
+            if (this.state.showSearchDropdown) {
+                const wrapper = document.querySelector(".crm-search-dropdown-wrapper");
+                if (wrapper && !wrapper.contains(event.target)) {
+                    this.state.showSearchDropdown = false;
+                }
+            }
+        };
+        document.addEventListener("click", this.onDocumentClick);
+
+        onWillUnmount(() => {
+            document.removeEventListener("click", this.onDocumentClick);
+        });
 
 
         onWillStart(
@@ -171,6 +238,12 @@ export class PortalCRM extends Component {
             this.state.canEdit =
                 Boolean(data.can_edit);
 
+            this.state.isAdmin =
+                Boolean(data.is_admin);
+
+            this.state.salespersons =
+                data.salespersons || [];
+
             this.state.currentUserId =
                 data.current_user_id || false;
 
@@ -208,111 +281,120 @@ export class PortalCRM extends Component {
     // FILTERED LEADS
     // ============================================================
 
-    get filteredLeads() {
 
-        let leads = [
-            ...this.state.leads
-        ];
-        if (this.state.filter === "leads") {
-            leads = leads.filter(
-                (lead) => (lead.type || "opportunity") === "lead"
-            );
-        } else {
-            leads = leads.filter(
-                (lead) => (lead.type || "opportunity") === "opportunity"
-            );
-        }
-        // Search
-        const search =
-            (
-                this.state.search || ""
-            )
+    get searchFilteredLeads() {
+        let leads = [...this.state.leads];
+
+        const search = (this.state.search || "")
             .trim()
             .toLowerCase();
 
-
         if (search) {
+            leads = leads.filter((lead) => {
+                const text = [
+                    lead.name,
+                    lead.partner_name,
+                    lead.contact_name,
+                    lead.email_from,
+                    lead.phone,
+                ].join(" ").toLowerCase();
 
-            leads = leads.filter(
-                (lead) => {
-
-                    const text = [
-                        lead.name,
-                        lead.partner_name,
-                        lead.contact_name,
-                        lead.email_from,
-                        lead.phone,
-                        lead.website,
-                        lead.partner_id
-                            ? lead.partner_id[1]
-                            : "",
-                    ]
-                        .join(" ")
-                        .toLowerCase();
-
-                    return text.includes(search);
-                }
-            );
+                return text.includes(search);
+            });
         }
 
-        if (this.state.filter === "leads") {
-            return leads;
+        // Salesperson Filter (Admin only)
+        if (this.state.isAdmin && this.state.selectedSalespersonId) {
+            if (this.state.selectedSalespersonId === "unassigned") {
+                leads = leads.filter((lead) => !lead.user_id);
+            } else {
+                const targetSpId = Number(this.state.selectedSalespersonId);
+                leads = leads.filter((lead) => {
+                    return lead.user_id && Number(lead.user_id[0]) === targetSpId;
+                });
+            }
         }
 
-
-        if (this.state.filter === "all") {
-            leads = leads.filter((lead) => lead.active !== false || this.isLost(lead));
+        // Creation Date Filter (Admin & Salesperson)
+        if (this.state.creationDateFilter) {
+            leads = leads.filter((lead) => {
+                return this.matchesCreationDate(lead, this.state.creationDateFilter);
+            });
         }
-
-        // Open / Won / Lost
-        if (this.state.filter === "open") {
-
-            leads = leads.filter(
-                (lead) =>
-                    !this.isWon(lead)
-                    && !this.isLost(lead)
-            );
-        }
-
-        if (this.state.filter === "won") {
-
-            leads = leads.filter(
-                (lead) =>
-                    lead.active !== false && this.isWon(lead)
-            );
-        }
-
-        if (this.state.filter === "lost") {
-
-            leads = leads.filter(
-                (lead) =>
-                    lead.active === false || this.isLost(lead)
-            );
-        }
-
-
-        // Stage filter
-        if (
-            this.state.stageFilter !== "all"
-        ) {
-
-            const stageId =
-                Number(
-                    this.state.stageFilter
-                );
-
-            leads = leads.filter(
-                (lead) =>
-                    lead.stage_id
-                    && lead.stage_id[0] === stageId
-            );
-        }
-
 
         return leads;
     }
 
 
+    get filteredLeads() {
+        let leads = this.searchFilteredLeads;
+
+        // 1. Apply the main status filter first.
+        if (this.state.filter === "opportunity" || this.state.filter === "all") {
+            // In opportunity filter only see active opportunities
+            leads = leads.filter(
+                (lead) =>
+                    lead.type === "opportunity" &&
+                    lead.active !== false &&
+                    !this.isLost(lead)
+            );
+        } else if (this.state.filter === "lost") {
+            // In lost filter only see lost opportunities
+            leads = leads.filter(
+                (lead) =>
+                    lead.type === "opportunity" &&
+                    (lead.active === false || this.isLost(lead))
+            );
+        } else if (this.state.filter === "leads") {
+            // In leads only see active leads
+            leads = leads.filter(
+                (lead) =>
+                    lead.type === "lead" &&
+                    lead.active !== false &&
+                    !this.isLost(lead)
+            );
+        } else if (this.state.filter === "lost_leads") {
+            leads = leads.filter(
+                (lead) =>
+                    lead.type === "lead" &&
+                    (lead.active === false || this.isLost(lead))
+            );
+        } else if (this.state.filter === "open") {
+            leads = leads.filter(
+                (lead) =>
+                    lead.type === "opportunity" &&
+                    lead.active !== false &&
+                    !this.isWon(lead) &&
+                    !this.isLost(lead)
+            );
+        } else if (this.state.filter === "won") {
+            leads = leads.filter(
+                (lead) =>
+                    lead.type === "opportunity" &&
+                    lead.active !== false &&
+                    this.isWon(lead) &&
+                    !this.isLost(lead)
+            );
+        }
+
+        // 2. Apply stage filter without overriding the main filter.
+        if (
+            this.state.filter !== "leads" &&
+            this.state.filter !== "lost_leads" &&
+            this.state.filter !== "lost" &&
+            this.state.stageFilter !== "all"
+        ) {
+            const stageId = Number(this.state.stageFilter);
+
+            leads = leads.filter(
+                (lead) =>
+                    lead.stage_id &&
+                    Number(lead.stage_id[0]) === stageId
+            );
+        }
+
+        return leads;
+    }
 
 
     get kanbanColumns() {
@@ -321,28 +403,23 @@ export class PortalCRM extends Component {
             return name !== "lost";
         });
 
-        // Show the Lost column ONLY if there are lost opportunities in the current view or filter is 'lost'
-        const hasLostLeads = this.filteredLeads.some((lead) => this.isLost(lead));
+        const lostColumn = {
+            id: "lost",
+            name: "Lost",
+            sequence: 999999,
+            isLostColumn: true,
+        };
 
-        if (hasLostLeads || this.state.filter === "lost") {
-            const lostColumn = {
-                id: "lost",
-                name: "Lost",
-                sequence: 999999,
-                isLostColumn: true,
-            };
+        // Find the Won column.
+        const wonIndex = normalStages.findIndex(
+            (stage) => this.isWonStage(stage)
+        );
 
-            // Find the Won column.
-            const wonIndex = normalStages.findIndex(
-                (stage) => this.isWonStage(stage)
-            );
-
-            // Insert Lost immediately after Won.
-            if (wonIndex !== -1) {
-                normalStages.splice(wonIndex + 1, 0, lostColumn);
-            } else {
-                normalStages.push(lostColumn);
-            }
+        // Insert Lost immediately after Won so the Kanban board shows the full pipeline.
+        if (wonIndex !== -1) {
+            normalStages.splice(wonIndex + 1, 0, lostColumn);
+        } else {
+            normalStages.push(lostColumn);
         }
 
         return normalStages;
@@ -361,23 +438,51 @@ export class PortalCRM extends Component {
     });
 }
 
+
     getStageLeads(stageId) {
-        // Special column for Lost opportunities.
+        // Special column for Lost opportunities in the kanban pipeline.
         if (stageId === "lost") {
-            return this.filteredLeads.filter(
-                (lead) => this.isLost(lead)
+            if (this.state.filter === "open" || this.state.filter === "won") {
+                return [];
+            }
+            return this.searchFilteredLeads.filter(
+                (lead) =>
+                    (lead.type === "opportunity" || !lead.type) &&
+                    this.isLost(lead)
             );
         }
 
+        // When specifically filtering for lost, normal stages show 0 cards.
+        if (this.state.filter === "lost") {
+            return [];
+        }
+
         // Normal stages show active opportunities only.
-        return this.filteredLeads.filter(
+        let stageLeads = this.searchFilteredLeads.filter(
             (lead) =>
+                (lead.type === "opportunity" || !lead.type) &&
                 lead.active !== false &&
+                !this.isLost(lead) &&
                 lead.stage_id &&
-                lead.stage_id[0] === stageId &&
-                !this.isLost(lead)
+                Number(lead.stage_id[0]) === Number(stageId)
         );
+
+        if (this.state.stageFilter !== "all") {
+            const stageFilterId = Number(this.state.stageFilter);
+            stageLeads = stageLeads.filter(
+                (lead) => Number(lead.stage_id[0]) === stageFilterId
+            );
+        }
+
+        if (this.state.filter === "open") {
+            stageLeads = stageLeads.filter((lead) => !this.isWon(lead));
+        } else if (this.state.filter === "won") {
+            stageLeads = stageLeads.filter((lead) => this.isWon(lead));
+        }
+
+        return stageLeads;
     }
+
 
 
 
@@ -392,24 +497,21 @@ export class PortalCRM extends Component {
 
     switchToKanban() {
 
-        if (this.state.filter === "leads") {
-            this.state.filter = "all";
+        if (this.state.filter === "leads" || this.state.filter === "lost_leads") {
+            this.state.filter = "opportunity";
         }
         this.setView("kanban");
     }
 
     switchToList() {
 
-        if (this.state.filter === "leads") {
-            this.state.filter = "all";
-        }
         this.setView("list");
     }
 
     switchToCalendar() {
 
-        if (this.state.filter === "leads") {
-            this.state.filter = "all";
+        if (this.state.filter === "leads" || this.state.filter === "lost_leads") {
+            this.state.filter = "opportunity";
         }
         this.setView("calendar");
     }
@@ -425,21 +527,63 @@ export class PortalCRM extends Component {
     setFilter(filter) {
 
         this.state.filter = filter;
-        if (filter === "leads") {
+        if (filter === "leads" || filter === "lost_leads") {
             this.state.view = "list";
+        } else {
+            this.state.showSearchDropdown = false;
         }
     }
 
+    toggleSearchDropdown(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        this.state.showSearchDropdown = !this.state.showSearchDropdown;
+    }
+
+    toggleLostLeadFilter(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        if (this.state.filter === "lost_leads") {
+            this.state.filter = "leads";
+        } else {
+            this.state.filter = "lost_leads";
+            this.state.view = "list";
+        }
+        this.state.showSearchDropdown = false;
+    }
+
+    removeLostLeadFilter(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        this.state.filter = "leads";
+    }
 
     clearFilters() {
 
         this.state.search = "";
 
-        this.state.filter = "all";
+        this.state.filter = "opportunity";
 
         this.state.stageFilter = "all";
 
         this.state.showFilters = false;
+
+        this.state.showSearchDropdown = false;
+
+        this.state.showCreationDateSubmenu = false;
+
+        this.state.showSalespersonSubmenu = false;
+
+        this.state.creationDateFilter = null;
+
+        this.state.selectedSalespersonId = null;
+
+        this.state.customStartDate = "";
+
+        this.state.customEndDate = "";
     }
 
 
@@ -447,6 +591,208 @@ export class PortalCRM extends Component {
 
         this.state.stageFilter =
             event.target.value;
+    }
+
+
+    // ============================================================
+    // CREATION DATE & SALESPERSON FILTERS
+    // ============================================================
+
+    matchesCreationDate(lead, filter) {
+        if (!lead || !lead.create_date) {
+            return false;
+        }
+        const dateStr = String(lead.create_date).replace(" ", "T");
+        const d = new Date(dateStr);
+        if (Number.isNaN(d.getTime())) {
+            return false;
+        }
+
+        if (filter.type === "month") {
+            return d.getFullYear() === filter.year && d.getMonth() === filter.month;
+        }
+        if (filter.type === "quarter") {
+            const q = Math.floor(d.getMonth() / 3) + 1;
+            return d.getFullYear() === filter.year && q === filter.quarter;
+        }
+        if (filter.type === "year") {
+            return d.getFullYear() === filter.year;
+        }
+        if (filter.type === "custom") {
+            if (filter.startDate) {
+                const start = new Date(`${filter.startDate}T00:00:00`);
+                if (d < start) {
+                    return false;
+                }
+            }
+            if (filter.endDate) {
+                const end = new Date(`${filter.endDate}T23:59:59.999`);
+                if (d > end) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
+    get creationDateMonths() {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        const currentMonth = now.getMonth();
+        const months = [];
+        for (let offset = 0; offset < 3; offset++) {
+            let mIndex = currentMonth - offset;
+            let year = currentYear;
+            if (mIndex < 0) {
+                mIndex += 12;
+                year -= 1;
+            }
+            months.push({
+                key: `month_${year}_${mIndex}`,
+                type: "month",
+                month: mIndex,
+                year: year,
+                label: monthNames[mIndex],
+            });
+        }
+        return months;
+    }
+
+    get creationDateQuarters() {
+        const currentYear = new Date().getFullYear();
+        return [
+            { key: `q_${currentYear}_4`, type: "quarter", quarter: 4, year: currentYear, label: "Q4" },
+            { key: `q_${currentYear}_3`, type: "quarter", quarter: 3, year: currentYear, label: "Q3" },
+            { key: `q_${currentYear}_2`, type: "quarter", quarter: 2, year: currentYear, label: "Q2" },
+            { key: `q_${currentYear}_1`, type: "quarter", quarter: 1, year: currentYear, label: "Q1" },
+        ];
+    }
+
+    get creationDateYears() {
+        const currentYear = new Date().getFullYear();
+        return [
+            { key: `year_${currentYear}`, type: "year", year: currentYear, label: String(currentYear) },
+            { key: `year_${currentYear - 1}`, type: "year", year: currentYear - 1, label: String(currentYear - 1) },
+            { key: `year_${currentYear - 2}`, type: "year", year: currentYear - 2, label: String(currentYear - 2) },
+        ];
+    }
+
+    isDateFilterActive(item) {
+        if (!this.state.creationDateFilter) {
+            return false;
+        }
+        return this.state.creationDateFilter.key === item.key;
+    }
+
+    toggleCreationDateSubmenu(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        this.state.showCreationDateSubmenu = !this.state.showCreationDateSubmenu;
+    }
+
+    toggleSalespersonSubmenu(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        this.state.showSalespersonSubmenu = !this.state.showSalespersonSubmenu;
+    }
+
+    setCreationDateFilter(item) {
+        if (this.state.creationDateFilter && this.state.creationDateFilter.key === item.key) {
+            this.state.creationDateFilter = null;
+        } else {
+            this.state.creationDateFilter = item;
+        }
+        this.state.showSearchDropdown = false;
+    }
+
+    removeCreationDateFilter(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        this.state.creationDateFilter = null;
+        this.state.customStartDate = "";
+        this.state.customEndDate = "";
+    }
+
+    applyCustomDateRange(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        const start = this.state.customStartDate;
+        const end = this.state.customEndDate;
+        if (!start && !end) {
+            return;
+        }
+
+        let label = "";
+        if (start && end) {
+            label = `${start} to ${end}`;
+        } else if (start) {
+            label = `From ${start}`;
+        } else {
+            label = `Until ${end}`;
+        }
+
+        this.state.creationDateFilter = {
+            key: `custom_${start}_${end}`,
+            type: "custom",
+            startDate: start,
+            endDate: end,
+            label: label,
+        };
+        this.state.showSearchDropdown = false;
+    }
+
+    get availableSalespersons() {
+        const spMap = new Map();
+        (this.state.salespersons || []).forEach((sp) => {
+            if (sp && sp.id) {
+                spMap.set(String(sp.id), sp);
+            }
+        });
+        (this.state.leads || []).forEach((l) => {
+            if (l.user_id && l.user_id[0]) {
+                const id = String(l.user_id[0]);
+                if (!spMap.has(id)) {
+                    spMap.set(id, { id: l.user_id[0], name: l.user_id[1] });
+                }
+            }
+        });
+        return Array.from(spMap.values()).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
+    get selectedSalespersonName() {
+        if (!this.state.selectedSalespersonId) {
+            return "";
+        }
+        if (this.state.selectedSalespersonId === "unassigned") {
+            return "Unassigned";
+        }
+        const sp = this.availableSalespersons.find((s) => String(s.id) === String(this.state.selectedSalespersonId));
+        return sp ? sp.name : "Salesperson";
+    }
+
+    setSalespersonFilter(spId) {
+        if (this.state.selectedSalespersonId === spId) {
+            this.state.selectedSalespersonId = null;
+        } else {
+            this.state.selectedSalespersonId = spId;
+        }
+        this.state.showSearchDropdown = false;
+    }
+
+    removeSalespersonFilter(event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        this.state.selectedSalespersonId = null;
     }
 
 
@@ -470,7 +816,7 @@ export class PortalCRM extends Component {
 
     handleEmptyCreate() {
 
-        if (this.state.filter === "leads") {
+        if (this.state.filter === "leads" || this.state.filter === "lost_leads") {
             this.newLead();
         } else {
             this.newOpportunity();
@@ -480,8 +826,8 @@ export class PortalCRM extends Component {
 
     toggleLeads() {
 
-        if (this.state.filter === "leads") {
-            this.state.filter = "all";
+        if (this.state.filter === "leads" || this.state.filter === "lost_leads") {
+            this.state.filter = "opportunity";
             this.state.view = "kanban";
         } else {
             this.state.filter = "leads";
@@ -494,6 +840,34 @@ export class PortalCRM extends Component {
 
         window.location.href =
             `/my/crm/${lead.id}`;
+    }
+
+
+    async restoreLead(lead, event) {
+
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+
+        if (!this.state.canEdit) {
+            return;
+        }
+
+        try {
+            const result = await rpc("/my/crm/restore", {
+                lead_id: lead.id,
+            });
+
+            if (result && result.success) {
+                await this.loadCRM();
+            } else {
+                this.state.error = (result && result.error) || "Unable to restore record.";
+            }
+        } catch (error) {
+            console.error("CRM restore error:", error);
+            this.state.error = "Unable to restore record.";
+        }
     }
 
 
@@ -782,16 +1156,18 @@ export class PortalCRM extends Component {
         .includes("won");
     }
     isLost(lead) {
-
-        const name =
-            lead.stage_id
-                ? lead.stage_id[1]
-                : "";
-
-        return (
-            lead.active === false
-            || (name || "").toLowerCase().includes("lost")
-        );
+        if (!lead) {
+            return false;
+        }
+        // Active opportunities and leads are never lost
+        if (lead.active !== false) {
+            return false;
+        }
+        // Inactive records: lost if opportunity or explicitly marked is_lost
+        if (lead.type === "opportunity" || lead.type === "lead" || !lead.type) {
+            return true;
+        }
+        return Boolean(lead.is_lost);
     }
 
     priorityStars() {
@@ -1086,7 +1462,7 @@ registry
 // ============================================================
 
 function initPortalCRMDetail() {
-    var customerSelect = document.getElementById("crm_partner_id_select") || document.querySelector('select[name="partner_id"]');
+    var customerSelect = document.getElementById("crm_partner_id_select") || document.getElementById("crm_lead_partner_id_select") || document.querySelector('.crm-customer-select') || document.querySelector('select[name="partner_id"]');
     var companySelect = document.getElementById("crm_company_partner_id");
     var hiddenPartnerName = document.getElementById("crm_partner_name_hidden");
     var stageSelect = document.getElementById("crm_stage_id_select");
@@ -1188,48 +1564,61 @@ function initPortalCRMDetail() {
         }
 
         var contactName = contactNameInput && contactNameInput.value ? contactNameInput.value.trim() : "";
-        if (!compName && !contactName) return;
+        if (!compName && !contactName) {
+            var customerHeaderSpan = document.querySelector(".crm-detail-customer span:last-child");
+            if (customerHeaderSpan) {
+                customerHeaderSpan.textContent = "";
+            }
+            return;
+        }
+
+        // Standard Odoo CRM Dynamic Contact Field Display:
+        // 1. When both Company Name and Contact Name are entered -> "Company Name, Contact Name"
+        // 2. When only Contact Name is entered -> "Contact Name"
+        // 3. When only Company Name is entered -> "Company Name"
+        var displayName = "";
+        if (compName && contactName) {
+            displayName = compName + ", " + contactName;
+        } else if (contactName) {
+            displayName = contactName;
+        } else if (compName) {
+            displayName = compName;
+        }
 
         var lowerCompName = compName.toLowerCase();
-        var companyPartner = customers.find(function (c) {
-            return (c.name || "").trim().toLowerCase() === lowerCompName && c.is_company;
-        });
-        if (!companyPartner && compName) {
+        var companyPartner = null;
+        if (compName) {
             companyPartner = customers.find(function (c) {
+                return (c.name || "").trim().toLowerCase() === lowerCompName && c.is_company;
+            }) || customers.find(function (c) {
                 return (c.name || "").trim().toLowerCase() === lowerCompName;
             });
         }
 
-        var targetContact = false;
+        var targetContact = null;
         if (contactName) {
             var lowerContactName = contactName.toLowerCase();
-            targetContact = customers.find(function (c) {
-                if ((c.name || "").trim().toLowerCase() === lowerContactName) {
-                    if (companyPartner && c.parent_id) {
-                        return String(c.parent_id) === String(companyPartner.id);
-                    }
-                    return true;
-                }
-                return false;
-            });
+            if (companyPartner) {
+                targetContact = customers.find(function (c) {
+                    return (c.name || "").trim().toLowerCase() === lowerContactName && String(c.parent_id) === String(companyPartner.id);
+                });
+            }
+            if (!targetContact) {
+                targetContact = customers.find(function (c) {
+                    return !c.is_company && (c.name || "").trim().toLowerCase() === lowerContactName;
+                });
+            }
         }
 
-        // Two modes:
-        // 1. If won: "if existing customer click won that time see the contact ."
-        //    Prioritize contact!
-        // 2. If not won: "if we create a new customer that time in opportunity see the customer name not waiting to won the stage ."
-        //    Prioritize customer company name!
-        var isWon = isWonStage();
-        var targetPartner = isWon ? (targetContact || companyPartner) : (companyPartner || targetContact);
-        var displayName = isWon && contactName ? contactName : compName;
-        if (!displayName) displayName = targetPartner ? targetPartner.name : "";
+        var targetPartner = targetContact || companyPartner;
 
-        if (customerSelect) {
+        var allSelects = document.querySelectorAll(".crm-customer-select");
+        allSelects.forEach(function (selectEl) {
             if (targetPartner) {
                 var optExists = false;
-                for (var i = 0; i < customerSelect.options.length; i++) {
-                    if (String(customerSelect.options[i].value) === String(targetPartner.id)) {
-                        customerSelect.selectedIndex = i;
+                for (var i = 0; i < selectEl.options.length; i++) {
+                    if (String(selectEl.options[i].value) === String(targetPartner.id)) {
+                        selectEl.selectedIndex = i;
                         optExists = true;
                         break;
                     }
@@ -1237,28 +1626,38 @@ function initPortalCRMDetail() {
                 if (!optExists) {
                     var newOpt = document.createElement("option");
                     newOpt.value = targetPartner.id;
-                    newOpt.textContent = targetPartner.name;
+                    newOpt.textContent = targetPartner.display_name || displayName;
                     newOpt.selected = true;
-                    customerSelect.appendChild(newOpt);
+                    selectEl.appendChild(newOpt);
                 }
             } else if (displayName) {
-                var tempOptExists = false;
-                for (var j = 0; j < customerSelect.options.length; j++) {
-                    if ((customerSelect.options[j].textContent || "").trim().toLowerCase() === displayName.toLowerCase()) {
-                        customerSelect.selectedIndex = j;
-                        tempOptExists = true;
+                var foundDynOpt = null;
+                for (var j = 0; j < selectEl.options.length; j++) {
+                    if (selectEl.options[j].getAttribute("data-dynamic-contact") === "true") {
+                        foundDynOpt = selectEl.options[j];
                         break;
                     }
                 }
-                if (!tempOptExists) {
-                    var tempOpt = document.createElement("option");
-                    tempOpt.value = "";
-                    tempOpt.textContent = displayName;
-                    tempOpt.selected = true;
-                    customerSelect.appendChild(tempOpt);
+                if (foundDynOpt) {
+                    foundDynOpt.textContent = displayName;
+                    foundDynOpt.value = "";
+                    foundDynOpt.selected = true;
+                } else {
+                    var dynOpt = document.createElement("option");
+                    dynOpt.value = "";
+                    dynOpt.textContent = displayName;
+                    dynOpt.setAttribute("data-dynamic-contact", "true");
+                    dynOpt.selected = true;
+                    selectEl.appendChild(dynOpt);
+                }
+            } else {
+                for (var k = selectEl.options.length - 1; k >= 0; k--) {
+                    if (selectEl.options[k].getAttribute("data-dynamic-contact") === "true") {
+                        selectEl.remove(k);
+                    }
                 }
             }
-        }
+        });
 
         var customerHeaderSpan = document.querySelector(".crm-detail-customer span:last-child");
         if (customerHeaderSpan && displayName) {
@@ -1318,14 +1717,10 @@ function initPortalCRMDetail() {
                     }
                 }
             }
-            if (isWonStage()) {
-                autoAssignWonCustomer();
-            }
+            autoAssignWonCustomer();
         });
         contactNameInput.addEventListener("change", function () {
-            if (isWonStage()) {
-                autoAssignWonCustomer();
-            }
+            autoAssignWonCustomer();
         });
     }
 
@@ -1338,15 +1733,11 @@ function initPortalCRMDetail() {
         });
     }
 
-    if (isWonStage()) {
-        autoAssignWonCustomer();
-    }
+    autoAssignWonCustomer();
 
     if (stageSelect) {
         stageSelect.addEventListener("change", function () {
-            if (isWonStage()) {
-                autoAssignWonCustomer();
-            }
+            autoAssignWonCustomer();
             var currentStageId = String(this.value);
             stageBarItems.forEach(function (item) {
                 if (item.getAttribute("data-stage-id") === currentStageId) {
@@ -1370,17 +1761,16 @@ function initPortalCRMDetail() {
                 stageSelect.value = stageId;
                 stageSelect.dispatchEvent(new Event("change"));
             }
-            if (isWonStage()) {
-                autoAssignWonCustomer();
-            }
+            autoAssignWonCustomer();
         });
     });
 
-    if (customerSelect) {
-        customerSelect.addEventListener("change", function () {
+    var allCustomerSelects = document.querySelectorAll(".crm-customer-select");
+    allCustomerSelects.forEach(function (selectEl) {
+        selectEl.addEventListener("change", function () {
             fillContactFieldsById(this.value);
         });
-    }
+    });
 
     function fillContactFieldsById(selectedId) {
         if (!selectedId) return;
@@ -1411,7 +1801,7 @@ function initPortalCRMDetail() {
             }
             if (hiddenPartnerName) hiddenPartnerName.value = cust.name;
             if (companyNameInput) companyNameInput.value = cust.name;
-            if (contactNameInput) contactNameInput.value = cust.name;
+            if (contactNameInput) contactNameInput.value = "";
         } else {
             if (contactNameInput) contactNameInput.value = cust.name;
             if (cust.parent_id && companySelect) {
@@ -1423,16 +1813,21 @@ function initPortalCRMDetail() {
                 }
             }
             if (hiddenPartnerName && cust.parent_name) hiddenPartnerName.value = cust.parent_name;
-            if (companyNameInput && cust.parent_name) companyNameInput.value = cust.parent_name;
+            if (companyNameInput) companyNameInput.value = cust.parent_name || "";
+            if (!cust.parent_id) {
+                if (companySelect) companySelect.value = "";
+                if (hiddenPartnerName) hiddenPartnerName.value = "";
+            }
         }
 
+        var headerName = cust.display_name || cust.name;
         var customerHeaderSpan = document.querySelector(".crm-detail-customer span:last-child");
         if (customerHeaderSpan) {
-            customerHeaderSpan.textContent = cust.name;
+            customerHeaderSpan.textContent = headerName;
         }
         var customerAvatarSpan = document.querySelector(".crm-detail-avatar");
-        if (customerAvatarSpan && cust.name) {
-            customerAvatarSpan.textContent = cust.name.charAt(0).toUpperCase();
+        if (customerAvatarSpan && headerName) {
+            customerAvatarSpan.textContent = headerName.charAt(0).toUpperCase();
         }
     }
 
@@ -1644,7 +2039,10 @@ function initPortalCRMDetail() {
             if (!val && customerSelect && customerSelect.selectedIndex >= 0) {
                 var opt = customerSelect.options[customerSelect.selectedIndex];
                 if (opt && opt.value) {
-                    val = (opt.textContent || "").trim();
+                    var custObj = customers.find(function (c) { return String(c.id) === String(opt.value); });
+                    if (custObj) {
+                        val = custObj.is_company ? custObj.name : (custObj.parent_name || "");
+                    }
                 }
             }
             return val;
@@ -1676,7 +2074,7 @@ function initPortalCRMDetail() {
             }
 
             // Sync Customer from main detail form if selected
-            var formCustSelect = document.getElementById("crm_partner_id_select");
+            var formCustSelect = document.getElementById("crm_partner_id_select") || document.getElementById("crm_lead_partner_id_select") || document.querySelector('.crm-customer-select');
             if (formCustSelect && modalPartnerSelect && formCustSelect.value) {
                 modalPartnerSelect.value = formCustSelect.value;
                 var existRadio = modal.querySelector('input[name="customer_action"][value="exist"]');

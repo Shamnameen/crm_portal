@@ -22,12 +22,8 @@ class CrmLead(models.Model):
             if lead.partner_id:
                 if not lead.partner_id.is_company:
                     lead.contact_name = lead.partner_id.name
-                elif not lead.contact_name:
-                    child_contacts = lead.partner_id.child_ids.filtered(
-                        lambda p: p.type == 'contact' or not p.is_company
-                    )
-                    if child_contacts:
-                        lead.contact_name = child_contacts[0].name
+                else:
+                    lead.contact_name = False
             # If not partner_id: PRESERVE existing contact_name, do not reset to False!
 
     @api.depends('partner_id')
@@ -38,9 +34,6 @@ class CrmLead(models.Model):
                 partner_vals = lead._prepare_partner_name_from_partner(lead.partner_id)
                 if partner_vals.get('partner_name'):
                     lead.partner_name = partner_vals['partner_name']
-            elif not lead.partner_name and lead.company_partner_id:
-                lead.partner_name = lead.company_partner_id.name
-            # If not partner_id: PRESERVE existing partner_name, do not reset to False!
 
     def _create_customer(self, with_parent=None):
         self.ensure_one()
@@ -51,12 +44,7 @@ class CrmLead(models.Model):
             contact_name = parsed[0] if parsed else False
 
         company_name = (self.partner_name or '').strip()
-        if not contact_name and company_name:
-            contact_name = company_name
-        elif not company_name and contact_name:
-            company_name = contact_name
-        elif not company_name and not contact_name and self.name:
-            company_name = self.name.strip()
+        if not company_name and not contact_name and self.name:
             contact_name = self.name.strip()
 
         partner_company = False
@@ -79,18 +67,22 @@ class CrmLead(models.Model):
                 partner_company = Partner.create(
                     self._prepare_customer_values(company_name, is_company=True)
                 )
-        elif self.partner_id:
+        elif self.partner_id and self.partner_id.is_company:
             partner_company = self.partner_id
+        elif self.partner_id and self.partner_id.parent_id:
+            partner_company = self.partner_id.parent_id
 
         existing_contact = False
         if contact_name:
             # Check if contact already exists
-            domain = [('name', '=ilike', contact_name.strip())]
+            domain = [('name', '=ilike', contact_name.strip()), ('is_company', '=', False)]
             if partner_company:
                 domain.append(('parent_id', '=', partner_company.id))
             if self.email_from:
                 domain = ['|', ('email', '=ilike', self.email_from.strip())] + domain
             existing_contact = Partner.search(domain, limit=1)
+            if not existing_contact and not partner_company:
+                existing_contact = Partner.search([('name', '=ilike', contact_name.strip()), ('is_company', '=', False)], limit=1)
             if not existing_contact and partner_company and contact_name.strip().lower() == partner_company.name.strip().lower():
                 existing_contact = partner_company
             elif not existing_contact:
@@ -125,19 +117,15 @@ class CrmLead(models.Model):
 
         for lead in self.with_context(skip_customer_mapping=True):
             company_name = (lead.partner_name or '').strip()
-            if not company_name and lead.company_partner_id:
-                company_name = (lead.company_partner_id.name or '').strip()
-            if not company_name and lead.partner_id:
+            contact_name = (lead.contact_name or '').strip()
+
+            if not company_name and not contact_name and lead.partner_id:
                 if lead.partner_id.is_company:
                     company_name = (lead.partner_id.name or '').strip()
-                elif lead.partner_id.parent_id:
-                    company_name = (lead.partner_id.parent_id.name or '').strip()
-                elif lead.partner_id.name:
-                    company_name = (lead.partner_id.name or '').strip()
-
-            contact_name = (lead.contact_name or '').strip()
-            if not contact_name and lead.partner_id and not lead.partner_id.is_company:
-                contact_name = (lead.partner_id.name or '').strip()
+                else:
+                    contact_name = (lead.partner_id.name or '').strip()
+                    if lead.partner_id.parent_id:
+                        company_name = (lead.partner_id.parent_id.name or '').strip()
 
             if not company_name and not contact_name and not lead.partner_id:
                 continue
@@ -161,7 +149,6 @@ class CrmLead(models.Model):
                     customer_vals = {
                         'name': company_name,
                         'is_company': True,
-                        'customer_rank': 1,
                     }
                     if lead.phone:
                         customer_vals['phone'] = lead.phone
@@ -187,14 +174,14 @@ class CrmLead(models.Model):
                     target_company = Partner.create(customer_vals)
             elif lead.partner_id and lead.partner_id.is_company:
                 target_company = lead.partner_id
-            elif lead.partner_id and lead.partner_id.parent_id:
-                target_company = lead.partner_id.parent_id
 
             target_contact = False
             if contact_name:
-                domain = [('name', '=ilike', contact_name)]
+                domain = [('name', '=ilike', contact_name), ('is_company', '=', False)]
                 if target_company:
                     domain.append(('parent_id', '=', target_company.id))
+                else:
+                    domain.append(('parent_id', '=', False))
                 existing_contact = Partner.search(domain, limit=1)
                 if not existing_contact and target_company and contact_name.lower() == target_company.name.lower():
                     target_contact = target_company
@@ -211,33 +198,24 @@ class CrmLead(models.Model):
                     target_contact = existing_contact
                     if target_company and not target_contact.parent_id:
                         target_contact.write({'parent_id': target_company.id})
-            elif lead.partner_id and not lead.partner_id.is_company:
-                target_contact = lead.partner_id
-            elif target_company:
-                # If no contact_name entered, check if the company has existing child contacts
-                child_contacts = target_company.child_ids.filtered(
-                    lambda p: p.type == 'contact' or not p.is_company
-                )
-                if child_contacts:
-                    target_contact = child_contacts[0]
 
-
-            if is_won:
-                target_partner = target_contact or target_company
-            else:
-                target_partner = target_company or target_contact
+            target_partner = target_contact or target_company
 
             vals_to_write = {}
             if target_partner and (not lead.partner_id or lead.partner_id.id != target_partner.id):
                 vals_to_write['partner_id'] = target_partner.id
             if company_name and lead.partner_name != company_name:
                 vals_to_write['partner_name'] = company_name
-            elif not company_name and target_company and not lead.partner_name:
-                vals_to_write['partner_name'] = target_company.name
+            elif not company_name and lead.partner_name:
+                vals_to_write['partner_name'] = False
             if contact_name and lead.contact_name != contact_name:
                 vals_to_write['contact_name'] = contact_name
-            elif not contact_name and target_contact and not lead.contact_name:
-                vals_to_write['contact_name'] = target_contact.name
+            elif not contact_name and lead.contact_name:
+                vals_to_write['contact_name'] = False
+            if 'company_partner_id' in lead._fields:
+                target_comp_id = target_company.id if target_company else False
+                if lead.company_partner_id.id != target_comp_id:
+                    vals_to_write['company_partner_id'] = target_comp_id
 
             if vals_to_write:
                 lead.sudo().write(vals_to_write)

@@ -9,7 +9,7 @@
                 <h2>
                     Hello, <t t-esc="state.currentUserName || 'there'"/>!
                 </h2>
-                <p t-if="state.filter === 'leads'">Welcome to your CRM leads. Here is an overview of your leads.</p>
+                <p t-if="state.filter === 'leads' || state.filter === 'lost_leads'">Welcome to your CRM leads. Here is an overview of your leads.</p>
                 <p t-else="">Welcome back to your CRM pipeline. Here is an overview of your opportunities.</p>
             </div>
 
@@ -18,12 +18,189 @@
 
                 <div class="crm-portal-search">
                     <span class="fa fa-search crm-search-icon"/>
+                    <div t-if="state.filter === 'lost_leads'" class="crm-search-chip">
+                        <span class="fa fa-filter me-1"/>
+                        <span>Lost</span>
+                        <span
+                            class="fa fa-times crm-search-chip-remove"
+                            t-on-click="removeLostLeadFilter"
+                            title="Remove filter"
+                        />
+                    </div>
+                    <div t-if="state.creationDateFilter" class="crm-search-chip">
+                        <span class="fa fa-calendar me-1"/>
+                        <span><t t-esc="'Creation Date: ' + state.creationDateFilter.label"/></span>
+                        <span
+                            class="fa fa-times crm-search-chip-remove"
+                            t-on-click="removeCreationDateFilter"
+                            title="Remove filter"
+                        />
+                    </div>
+                    <div t-if="state.isAdmin and state.selectedSalespersonId" class="crm-search-chip">
+                        <span class="fa fa-user me-1"/>
+                        <span><t t-esc="'Salesperson: ' + selectedSalespersonName"/></span>
+                        <span
+                            class="fa fa-times crm-search-chip-remove"
+                            t-on-click="removeSalespersonFilter"
+                            title="Remove filter"
+                        />
+                    </div>
                     <input
                         type="text"
                         class="form-control"
-                        t-att-placeholder="state.filter === 'leads' ? 'Search leads...' : 'Search opportunities...'"
+                        t-att-placeholder="(state.filter === 'leads' || state.filter === 'lost_leads') ? 'Search leads...' : (state.filter === 'lost' ? 'Search lost opportunities...' : 'Search opportunities...')"
                         t-model="state.search"
                     />
+                    <div class="crm-search-dropdown-wrapper">
+                        <button
+                            type="button"
+                            class="crm-search-dropdown-toggle"
+                            t-on-click="toggleSearchDropdown"
+                            title="Filters"
+                        >
+                            <span class="fa fa-caret-down"/>
+                        </button>
+                        <div t-if="state.showSearchDropdown" class="crm-search-dropdown-menu">
+                            <div class="crm-search-dropdown-header">
+                                <span class="fa fa-filter me-2"/>Filters
+                            </div>
+                            <button
+                                t-if="state.filter === 'leads' || state.filter === 'lost_leads'"
+                                type="button"
+                                class="crm-search-dropdown-item"
+                                t-on-click="toggleLostLeadFilter"
+                            >
+                                <span t-att-class="state.filter === 'lost_leads' ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                <span>Lost</span>
+                            </button>
+
+                            <!-- Creation Date Filter (Admin & Salesperson) -->
+                            <div class="crm-search-dropdown-submenu-wrapper">
+                                <button
+                                    type="button"
+                                    class="crm-search-dropdown-item crm-dropdown-item-expandable"
+                                    t-on-click="toggleCreationDateSubmenu"
+                                >
+                                    <span t-att-class="state.creationDateFilter ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                    <span class="crm-dropdown-item-text">Creation Date</span>
+                                    <span t-att-class="state.showCreationDateSubmenu ? 'fa fa-caret-up crm-dropdown-caret' : 'fa fa-caret-down crm-dropdown-caret'"/>
+                                </button>
+
+                                <div t-if="state.showCreationDateSubmenu" class="crm-search-dropdown-submenu">
+                                    <!-- Standard Months -->
+                                    <t t-foreach="creationDateMonths" t-as="m" t-key="m.key">
+                                        <button
+                                            type="button"
+                                            class="crm-search-dropdown-subitem"
+                                            t-on-click="() => this.setCreationDateFilter(m)"
+                                        >
+                                            <span t-att-class="isDateFilterActive(m) ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                            <span><t t-esc="m.label"/></span>
+                                        </button>
+                                    </t>
+
+                                    <!-- Quarters -->
+                                    <div class="crm-dropdown-subdivider"/>
+                                    <t t-foreach="creationDateQuarters" t-as="q" t-key="q.key">
+                                        <button
+                                            type="button"
+                                            class="crm-search-dropdown-subitem"
+                                            t-on-click="() => this.setCreationDateFilter(q)"
+                                        >
+                                            <span t-att-class="isDateFilterActive(q) ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                            <span><t t-esc="q.label"/></span>
+                                        </button>
+                                    </t>
+
+                                    <!-- Years -->
+                                    <div class="crm-dropdown-subdivider"/>
+                                    <t t-foreach="creationDateYears" t-as="y" t-key="y.key">
+                                        <button
+                                            type="button"
+                                            class="crm-search-dropdown-subitem"
+                                            t-on-click="() => this.setCreationDateFilter(y)"
+                                        >
+                                            <span t-att-class="isDateFilterActive(y) ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                            <span><t t-esc="y.label"/></span>
+                                        </button>
+                                    </t>
+
+                                    <!-- Custom Range -->
+                                    <div class="crm-dropdown-subdivider"/>
+                                    <div class="crm-custom-date-box" t-on-click.stop="">
+                                        <div class="crm-custom-date-title">Custom Range</div>
+                                        <div class="crm-custom-date-inputs">
+                                            <input
+                                                type="date"
+                                                class="form-control form-control-sm"
+                                                t-model="state.customStartDate"
+                                                placeholder="Start"
+                                            />
+                                            <span class="crm-custom-date-sep">to</span>
+                                            <input
+                                                type="date"
+                                                class="form-control form-control-sm"
+                                                t-model="state.customEndDate"
+                                                placeholder="End"
+                                            />
+                                        </div>
+                                        <div class="crm-custom-date-actions">
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm crm-btn-date-apply"
+                                                t-on-click="applyCustomDateRange"
+                                            >
+                                                Apply
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Salesperson Filter (Admin Only) -->
+                            <div t-if="state.isAdmin" class="crm-search-dropdown-submenu-wrapper">
+                                <div class="crm-dropdown-divider"/>
+                                <button
+                                    type="button"
+                                    class="crm-search-dropdown-item crm-dropdown-item-expandable"
+                                    t-on-click="toggleSalespersonSubmenu"
+                                >
+                                    <span t-att-class="state.selectedSalespersonId ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                    <span class="crm-dropdown-item-text">
+                                        <t t-if="state.selectedSalespersonId">
+                                            <t t-esc="'Salesperson: ' + selectedSalespersonName"/>
+                                        </t>
+                                        <t t-else="">
+                                            Salesperson
+                                        </t>
+                                    </span>
+                                    <span t-att-class="state.showSalespersonSubmenu ? 'fa fa-caret-up crm-dropdown-caret' : 'fa fa-caret-down crm-dropdown-caret'"/>
+                                </button>
+
+                                <div t-if="state.showSalespersonSubmenu" class="crm-search-dropdown-submenu">
+                                    <t t-foreach="availableSalespersons" t-as="sp" t-key="sp.id">
+                                        <button
+                                            type="button"
+                                            class="crm-search-dropdown-subitem"
+                                            t-on-click="() => this.setSalespersonFilter(sp.id)"
+                                        >
+                                            <span t-att-class="state.selectedSalespersonId == sp.id ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                            <span><t t-esc="sp.name"/></span>
+                                        </button>
+                                    </t>
+                                    <button
+                                        type="button"
+                                        class="crm-search-dropdown-subitem"
+                                        t-on-click="() => this.setSalespersonFilter('unassigned')"
+                                    >
+                                        <span t-att-class="state.selectedSalespersonId === 'unassigned' ? 'fa fa-check crm-dropdown-check' : 'crm-dropdown-check-placeholder'"/>
+                                        <span>Unassigned</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
                 </div>
 
                 <div class="crm-portal-actions">
@@ -105,10 +282,10 @@
                     <label>Status</label>
                     <div class="crm-filter-chips">
                         <button type="button"
-                            t-att-class="state.filter == 'all' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
-                            t-on-click="() => setFilter('all')">Opportunity</button>
+                            t-att-class="(state.filter == 'opportunity' || state.filter == 'all') ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
+                            t-on-click="() => setFilter('opportunity')">Opportunity</button>
                         <button type="button"
-                            t-att-class="state.filter == 'leads' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
+                            t-att-class="(state.filter == 'leads' || state.filter == 'lost_leads') ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
                             t-on-click="() => setFilter('leads')">Leads</button>
                         <button type="button"
                             t-att-class="state.filter == 'open' ? 'crm-filter-chip crm-filter-chip-active' : 'crm-filter-chip'"
@@ -122,25 +299,7 @@
                     </div>
                 </div>
 
-                <div class="crm-filter-group" t-if="state.filter != 'leads'">
-                    <label for="crm_stage_filter">Stage</label>
-                    <select
-                        id="crm_stage_filter"
-                        class="form-select form-select-sm crm-filter-select"
-                        t-model="state.stageFilter"
-                        t-on-change="onStageFilterChange"
-                    >
-                        <option value="all">All stages</option>
-                        <option
-                            t-foreach="state.stages"
-                            t-as="stage"
-                            t-key="stage.id"
-                            t-att-value="stage.id"
-                        >
-                            <t t-esc="stage.name"/>
-                        </option>
-                    </select>
-                </div>
+
 
                 <div class="crm-filter-group crm-filter-clear">
                     <button type="button" class="btn btn-sm crm-filter-clear-btn" t-on-click="clearFilters">
@@ -168,28 +327,30 @@
 
                 <!-- Empty state -->
                 <div
-                    t-if="filteredLeads.length === 0"
+                    t-if="(state.view === 'list' and filteredLeads.length === 0) or (!state.leads.length)"
                     class="crm-portal-empty"
                 >
                     <span class="fa fa-folder-open-o crm-empty-icon"/>
-                    <h4>No <t t-esc="state.filter === 'leads' ? 'leads' : 'opportunities'"/> found</h4>
+                    <h4>No <t t-esc="(state.filter === 'leads' || state.filter === 'lost_leads') ? 'leads' : 'opportunities'"/> found</h4>
                     <p class="text-muted">
-                        <t t-if="state.filter === 'leads'">No CRM leads match your current view.</t>
+                        <t t-if="state.filter === 'lost_leads'">No lost CRM leads match your current view.</t>
+                        <t t-elif="state.filter === 'leads'">No CRM leads match your current view.</t>
+                        <t t-elif="state.filter === 'lost'">No lost CRM opportunities match your current view.</t>
                         <t t-else="">No CRM opportunities match your current view.</t>
                     </p>
                     <button
-                        t-if="state.canEdit"
+                        t-if="state.canEdit and state.filter != 'lost' and state.filter != 'lost_leads'"
                         type="button"
                         class="btn crm-btn-new-lead mt-2"
                         t-on-click="handleEmptyCreate"
                     >
-                        <t t-esc="state.filter === 'leads' ? 'Create Lead' : 'Create Opportunity'"/>
+                        <t t-esc="(state.filter === 'leads' || state.filter === 'lost_leads') ? 'Create Lead' : 'Create Opportunity'"/>
                     </button>
                 </div>
 
                 <!-- ==================== KANBAN ==================== -->
                 <div
-                    t-if="state.view === 'kanban' and state.filter != 'leads' and state.leads.length"
+                    t-if="state.view === 'kanban' and state.filter != 'leads' and state.filter != 'lost_leads' and state.leads.length"
                     class="crm-kanban"
                 >
 
@@ -253,10 +414,10 @@
                                 </div>
 
                                 <!-- Company / Customer -->
-                                <div t-if="lead.partner_id || lead.partner_name" class="crm-card-info-row">
+                                <div t-if="lead.partner_id || lead.partner_name || lead.contact_name" class="crm-card-info-row">
                                     <span class="fa fa-building-o crm-card-info-icon"/>
                                     <span class="crm-card-info-text">
-                                        <t t-esc="lead.partner_id ? lead.partner_id[1] : lead.partner_name"/>
+                                        <t t-esc="lead.partner_id ? lead.partner_id[1] : ((lead.partner_name and lead.contact_name) ? (lead.partner_name + ', ' + lead.contact_name) : (lead.partner_name || lead.contact_name || ''))"/>
                                     </span>
                                 </div>
 
@@ -317,15 +478,15 @@
                 <!-- ========================= -->
 
                 <div
-                    t-if="state.view === 'list' and state.leads.length"
+                    t-if="state.view === 'list' and filteredLeads.length"
                     class="crm-list-wrapper table-responsive"
                 >
                     <table class="crm-list-table">
                         <thead>
                             <tr>
-                                <th><t t-esc="state.filter === 'leads' ? 'Lead' : 'Opportunity'"/></th>
+                                <th><t t-esc="(state.filter === 'leads' || state.filter === 'lost_leads') ? 'Lead' : 'Opportunity'"/></th>
                                 <th>Customer</th>
-                                <th t-if="state.filter != 'leads'">Stage</th>
+                                <th t-if="state.filter != 'leads' and state.filter != 'lost_leads'">Stage</th>
                                 <th>Expected Revenue</th>
                                 <th>Probability</th>
                                 <th>Deadline</th>
@@ -339,8 +500,8 @@
                                 t-on-click="() => openLead(lead)"
                             >
                                 <td><strong><t t-esc="lead.name"/></strong></td>
-                                <td><t t-esc="lead.partner_id ? lead.partner_id[1] : (lead.partner_name || lead.contact_name || '')"/></td>
-                                <td t-if="state.filter != 'leads'"><t t-esc="lead.stage_id ? lead.stage_id[1] : ''"/></td>
+                                <td><t t-esc="lead.partner_id ? lead.partner_id[1] : ((lead.partner_name and lead.contact_name) ? (lead.partner_name + ', ' + lead.contact_name) : (lead.partner_name || lead.contact_name || ''))"/></td>
+                                <td t-if="state.filter != 'leads' and state.filter != 'lost_leads'"><t t-esc="lead.stage_id ? lead.stage_id[1] : ''"/></td>
                                 <td><t t-esc="formatCurrency(lead.expected_revenue)"/></td>
                                 <td><t t-esc="lead.probability"/>%</td>
                                 <td><t t-esc="lead.date_deadline || ''"/></td>

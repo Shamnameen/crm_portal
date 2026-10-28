@@ -9,7 +9,7 @@ class CRMPortal(http.Controller):
     # ============================================================
 
     def _is_portal_user(self):
-        """Identify portal/shared users, excluding the public user."""
+        """Identify portal/salesperson users, excluding the public user."""
         user = request.env.user
         public_user = request.env.ref(
             'base.public_user',
@@ -17,7 +17,7 @@ class CRMPortal(http.Controller):
         )
         if public_user and user.id == public_user.id:
             return False
-        return bool(user.share)
+        return bool(user.share or user.has_group('sales_team.group_sale_salesman') or user.has_group('base.group_user'))
 
     def _is_admin(self):
         """Identify administrators."""
@@ -235,8 +235,20 @@ class CRMPortal(http.Controller):
                 name = 'Proposal'
             return [record.id, name]
 
+        is_admin = self._is_admin()
+        salespersons = []
+        if is_admin:
+            public_user_id = request.env.ref('base.public_user', raise_if_not_found=False)
+            sp_domain = [('active', '=', True)]
+            if public_user_id:
+                sp_domain.append(('id', '!=', public_user_id.id))
+            sp_records = request.env['res.users'].sudo().search(sp_domain, order='name')
+            salespersons = [{'id': sp.id, 'name': sp.name} for sp in sp_records]
+
         return {
             'can_edit': True,
+            'is_admin': is_admin,
+            'salespersons': salespersons,
             'current_user_id': user.id,
             'current_partner_id': user.partner_id.id,
             'current_user_name': user.name or '',
@@ -248,10 +260,9 @@ class CRMPortal(http.Controller):
                     'id': lead.id,
                     'type': lead.type or 'lead',
                     'active': bool(lead.active),
-                    'is_lost': bool(
-                        not lead.active
-                        or getattr(lead, 'lost_reason_id', False)
-                    ),
+                    'is_lost': bool(not lead.active),
+                    'lost_reason_id': many2one_value(lead.lost_reason_id),
+
                     'name': lead.name or '',
                     'partner_id': many2one_value(lead.partner_id),
                     'partner_name': lead.partner_name or '',
@@ -266,6 +277,10 @@ class CRMPortal(http.Controller):
                     'priority': lead.priority or '0',
                     'user_id': many2one_value(lead.user_id),
                     'team_id': many2one_value(lead.team_id),
+                    'create_date': (
+                        fields.Datetime.to_string(lead.create_date)
+                        if lead.create_date else False
+                    ),
                     'date_deadline': (
                         fields.Date.to_string(lead.date_deadline)
                         if lead.date_deadline else False
@@ -383,6 +398,7 @@ class CRMPortal(http.Controller):
             {
                 'id': c.id,
                 'name': c.name or '',
+                'display_name': c.display_name or c.name or '',
                 'email': c.email or '',
                 'phone': c.phone or '',
                 'website': c.website or '',
@@ -518,27 +534,11 @@ class CRMPortal(http.Controller):
         phone = (post.get('phone') or '').strip()
         website = (post.get('website') or '').strip()
 
-        if partner_name and not lead_partner and (record_type == 'opportunity' and stage and (stage.is_won or 'won' in (stage.name or '').lower())):
-            Partner = request.env['res.partner'].sudo()
-            matching_comp = Partner.search([
-                ('name', '=ilike', partner_name),
-                ('is_company', '=', True),
-            ], limit=1)
-            if not matching_comp:
-                matching_comp = Partner.search([
-                    ('name', '=ilike', partner_name),
-                ], limit=1)
-            if not matching_comp:
-                matching_comp = Partner.create({
-                    'name': partner_name,
-                    'is_company': True,
-                    'customer_rank': 1,
-                })
-            lead_partner = matching_comp
-
         if lead_partner:
             if not partner_name and lead_partner.is_company and lead_partner.name:
                 partner_name = lead_partner.name
+            elif not partner_name and lead_partner.parent_id:
+                partner_name = lead_partner.parent_id.name
             if not contact_name and not lead_partner.is_company and lead_partner.name:
                 contact_name = lead_partner.name
             if not email_from and lead_partner.email:
@@ -749,6 +749,7 @@ class CRMPortal(http.Controller):
             {
                 'id': c.id,
                 'name': c.name or '',
+                'display_name': c.display_name or c.name or '',
                 'email': c.email or '',
                 'phone': c.phone or '',
                 'website': c.website or '',
@@ -979,33 +980,8 @@ class CRMPortal(http.Controller):
             submitted_pname = (post.get('partner_name') or '').strip()
             if submitted_pname:
                 values['partner_name'] = submitted_pname
-            elif not lead.partner_name:
+            else:
                 values['partner_name'] = False
-
-        if values.get('partner_name'):
-            submitted_company = values['partner_name'].strip()
-            if submitted_company and is_won_stage:
-                current_pid = values.get('partner_id') or (lead.partner_id.id if lead.partner_id else False)
-                current_partner = request.env['res.partner'].sudo().browse(current_pid).exists() if current_pid else False
-                lead_name_str = (lead.name or '').strip().lower()
-                # If partner_id is unassigned OR matches the lead name (placeholder) OR matches the company name:
-                if not current_partner or (current_partner.name or '').strip().lower() == lead_name_str or (current_partner.name or '').strip().lower() == submitted_company.lower():
-                    Partner = request.env['res.partner'].sudo()
-                    matching_comp = Partner.search([
-                        ('name', '=ilike', submitted_company),
-                        ('is_company', '=', True),
-                    ], limit=1)
-                    if not matching_comp:
-                        matching_comp = Partner.search([
-                            ('name', '=ilike', submitted_company),
-                        ], limit=1)
-                    if not matching_comp:
-                        matching_comp = Partner.create({
-                            'name': submitted_company,
-                            'is_company': True,
-                            'customer_rank': 1,
-                        })
-                    values['partner_id'] = matching_comp.id
 
         # Server-side permission check for assigning salesperson
         if self._is_admin():
@@ -1129,10 +1105,12 @@ class CRMPortal(http.Controller):
             if existing_partner_id:
                 partner = request.env['res.partner'].sudo().browse(existing_partner_id).exists()
                 if partner:
-                    pname = partner.name if partner.is_company else (partner.parent_id.name if partner.parent_id else partner.name)
+                    pname = partner.name if partner.is_company else (partner.parent_id.name if partner.parent_id else False)
+                    cname = False if partner.is_company else partner.name
                     lead.sudo().write({
                         'partner_id': partner.id,
-                        'partner_name': pname or lead.partner_name,
+                        'partner_name': pname or False,
+                        'contact_name': cname or False,
                     })
         elif customer_action == 'create':
             comp_name = (company_confirm or lead.partner_name or '').strip()
@@ -1276,10 +1254,27 @@ class CRMPortal(http.Controller):
         if not lead:
             return request.not_found()
 
-        lead.sudo().write({'active': True})
+        lead.sudo().write({'active': True, 'lost_reason_id': False})
         return request.redirect(
             '/my/crm/%s?restored=1' % lead.id
         )
+
+    @http.route(
+        '/my/crm/restore',
+        type='jsonrpc',
+        auth='user',
+        website=True,
+    )
+    def restore_crm_lead_rpc(self, lead_id=None, **kwargs):
+        lead = self._get_accessible_lead(lead_id)
+        if not lead:
+            return {
+                'success': False,
+                'error': 'You cannot access this record.',
+            }
+
+        lead.sudo().write({'active': True, 'lost_reason_id': False})
+        return {'success': True, 'lead_id': lead.id}
 
     # ============================================================
     # DRAG / DROP STAGE CHANGE
